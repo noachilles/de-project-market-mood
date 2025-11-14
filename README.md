@@ -1,93 +1,110 @@
-# de-project
+# AI 기반 주식 인사이트 서비스 기획안
 
+## 1. 서비스 개요 (Service Overview)
 
+- 흩어진 시장 데이터를 AI로 분석하여, **검증된 실시간 시그널**을 개인에게 맞춤 제공하는 투자 인사이트 서비스
 
-## Getting started
+### 타겟 페르소나 (Target Persona)
+- "데이터 기반 스마트 개인 투자자" (20대~40대)
+- 기본적인 주식 투자를 하고 있으며, 네이버 증권 토론실이나 텔레그램에서 제공되는 **너무 많은 정보에 지쳐 있음**
+- 감정적 매매를 피하고, 데이터(수급, 뉴스, 차트)에 기반한 **‘자신만의 투자 근거’**를 갖고 싶어 함
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### 핵심 가치 제안 (Value Proposition)
+- **노이즈 제거:** 수만 개의 뉴스 중 ‘진짜’ 의미 있는 정보만 필터링
+- **시간 단축:** 주가, 수급, 뉴스를 한눈에 보며 의사결정 시간 단축
+- **개인화된 통찰:** ‘나에게만’ 유용한, ‘내가 설정한’ 시나리오가 발생할 때만 알림 제공
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## 2. 주요 기능 (Key Features)
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+서비스의 핵심은 다음 **3가지 기능**으로 구성됩니다.
 
+### 1) 실시간 주가 모니터링 차트
+
+“왜 주가가 오르는지, 차트·뉴스·수급을 따로 찾아보시나요?”
+
+#### What
+사용자가 관심 있는 종목(e.g., 삼성전자)의 3가지 핵심 데이터를 **하나의 실시간 차트**에 겹쳐서 표시합니다.
+
+1. **Price:** 실시간 캔들스틱 주가 차트  
+2. **Sentiment:** AI가 분석한 실시간 뉴스 감정 지수 (Line)  
+3. **Flow:** 외국인/기관의 실시간 순매수/도 (Bar)
+
+#### Why (User Value)
+- **‘이유’ 있는 확인:** 주가 급등 시, 그것이 ‘외국인 매수(Flow)’ 때문인지, ‘긍정 뉴스(Sentiment)’ 때문인지 즉시 파악 가능  
+- **인터랙티브 분석:** 차트 특정 시점(e.g., 오후 2시 10분)에 마우스를 올리면, 그 시점의 핵심 뉴스 요약("HBM 신규 수주")과 수급 현황을 툴팁으로 확인 가능
+
+---
+
+### 2) 나만의 ‘시그널’ 맞춤 알림
+
+“쓸모없는 푸시 알림은 그만. 내가 원하는 ‘시나리오’가 발생할 때만 알려드립니다.”
+
+#### What
+사용자가 마치 **레고 블록**을 조립하듯, 자신만의 투자 시나리오(시그널)를 직접 설정하고 구독(Subscribe)합니다.
+
+#### UI 예시 (룰 생성)
+```sql
+IF (종목 == 'SK하이닉스')
+AND (뉴스 토픽 == 'HBM' OR 'AI 칩')
+AND (감정 == '부정적' AND 지수 < -0.7)
+AND (외국인 수급 < -100억)
+THEN → 즉시 푸시 알림 전송
 ```
-cd existing_repo
-git remote add origin https://lab.ssafy.com/dtmg1ejk/de-project.git
-git branch -M master
-git push -uf origin master
-```
 
-## Integrate with your tools
 
-- [ ] [Set up project integrations](https://lab.ssafy.com/dtmg1ejk/de-project/-/settings/integrations)
+#### Why (User Value)
+- **초개인화:** 단순한 ‘가격 알림’이 아닌, ‘수급’과 ‘뉴스 감정’이 결합된 **복합적 시그널**을 실시간 포착  
+- **자동화된 모니터링:** Flink가 수만 개의 룰을 실시간 감시하므로, 사용자는 장을 지켜볼 필요 없음
 
-## Collaborate with your team
+---
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### 3) AI가 검증한 ‘선행 지표’ 리포트
 
-## Test and Deploy
+“감정 지수가 정말 주가에 영향을 줄까요? AI가 1년치 데이터로 검증했습니다.”
 
-Use the built-in continuous integration in GitLab.
+#### What
+매일 밤 배치 분석으로 HDFS(DB)에 저장된 지난 1년간 데이터를 분석하여, ‘뉴스’와 ‘주가’ 간 **통계적 상관관계 리포트**를 제공합니다.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+#### UI 예시 (대시보드 리포트)
+- [Spark 리포트] “AI 분석 결과, ‘HBM’ 토픽의 긍정 뉴스는 평균적으로 **10분 뒤 주가와 0.68의 높은 상관관계**를 보였습니다.”  
+- [Spark 리포트] “반면, 주가가 먼저 변동하고 ‘10분 뒤’ 뉴스가 나온(사후 보고) 상관관계는 **0.12로 낮게 나타났습니다.**”
 
-***
+#### Why (User Value)
+- **신뢰도 확보:** 감정 지수가 단순 참고가 아닌, **통계적으로 검증된 선행 지표**임을 증명  
+- **인사이트 발견:** “이 종목은 ‘실적’ 뉴스보다 ‘신제품’ 뉴스에 더 민감하게 반응하네” 등 데이터 기반 통찰 확보
 
-# Editing this README
+---
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## 3. 서비스 흐름 및 사용 데이터
 
-## Suggestions for a good README
+### 사용 데이터
+- 실시간 주가: 1분 단위 캔들스틱 데이터  
+- 실시간 뉴스: 5분 단위 ‘삼성전자’, ‘하이닉스’ 관련 뉴스  
+- 실시간 수급: 5분 단위 외국인/기관 순매수 데이터  
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+### 서비스 흐름
+1. **수집:** Airflow가 3가지 데이터를 주기적으로 수집하여 Kafka로 전송  
+2. **저장:** 모든 원본 데이터를 HDFS(DB)에 영구 저장  
+3. **실시간 분석:** Flink가 데이터를 실시간으로 조인 및 CEP 룰 매칭 → 알림 및 대시보드 데이터 생성  
+4. **배치 분석:** Spark가 매일 밤 1년치 데이터를 분석하여 ‘선행 지표 리포트’ 생성  
+5. **제공:** 사용자는 웹/앱(Vue/Django)을 통해 실시간 데이터와 리포트를 확인
 
-## Name
-Choose a self-explaining name for your project.
+---
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+## 4. 기대 효과 (Expected Benefits)
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+### 사용자 가치
+- **데이터 기반 투자:** 감정적 매매를 줄이고, 뉴스+수급+차트 기반의 논리적 의사결정 가능  
+- **정보 비대칭성 해소:** 기관이 독점하던 ‘뉴스 감정 분석’과 ‘복합 알림’ 기능을 개인에게 제공  
+- **시간 절약:** 불필요한 정보 탐색 없이, 자신이 설정한 시그널 발생 시에만 집중 가능
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+### 프로젝트(포트폴리오) 가치
+- **가치 변환 증명:** 실시간 데이터(원재료)를 개인화된 인사이트(제품)로 가공하는 **End-to-End 파이프라인 구축 역량** 증명  
+- **기술의 당위성:** “왜 Flink/Spark인가?”에 대해, **CEP 알림**과 **시차 상관관계 분석**으로 명확히 답변 가능
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## 기술 문서
+### ERD    
+![alt text](image.png)
