@@ -108,3 +108,52 @@ THEN → 즉시 푸시 알림 전송
 ## 기술 문서
 ### ERD    
 ![alt text](image.png)
+
+## 폴더 구조  
+
+```
+de-project/
+├── docker-compose.yml          # 전체 서비스 실행 (Kafka, Zookeeper, Postgres 등)
+├── .env                        # 환경 변수 (DB 비번, API 키 등)
+├── requirements.txt            # (선택) 로컬 개발용 전체 라이브러리 목록
+│
+├── producers/                  # [Producer] 데이터 수집기 (Python)
+│   ├── Dockerfile              # Producer 전용 컨테이너 빌드 파일
+│   ├── requirements.txt        # feedparser, kafka-python, requests 등
+│   ├── news_producer.py        # 뉴스 수집 및 Kafka 전송
+│   ├── price_producer.py       # 주가 수집 및 Kafka 전송
+│   └── supply_producer.py      # 수급 수집 및 Kafka 전송
+│
+├── flink-apps/                 # [Flink] 실시간 처리 (Java/Python)
+│   ├── Dockerfile              # Flink 전용 컨테이너 (커넥터 포함)
+│   ├── requirements.txt        # apache-flink, kafka-python 등
+│   ├── jobs/                   # Flink Job 소스 코드 폴더
+│   │   ├── stream_join.py      # 3개 스트림(뉴스,주가,수급) 조인 로직
+│   │   └── cep_alert.py        # 복합 이벤트 처리(알림) 로직
+│   └── connectors/             # (필요 시) Kafka 연결용 .jar 파일들
+│
+└── back-end/                   # [Consumer & Service] Django API 서버
+    ├── Dockerfile              # Django 컨테이너 빌드 파일
+    ├── requirements.txt        # Django, djangorestframework, psycopg2 등
+    ├── manage.py
+    ├── config/                 # Django 프로젝트 설정 (settings.py 등)
+    │
+    ├── feeds/                  # [Consumer 1] 뉴스 데이터 관리 앱
+    │   ├── models.py           # News 모델 (DB 테이블 정의)
+    │   └── management/         # 커스텀 명령어 폴더
+    │       └── commands/
+    │           └── run_news_consumer.py  # Kafka -> DB 저장 로직
+    │
+    ├── stocks/                 # [Consumer 2] 주가 데이터 관리 앱
+    │   ├── models.py
+    │   └── management/
+    │       └── commands/
+    │           └── run_price_consumer.py
+    │
+    ├── alerts/                 # [Consumer 3] 알림 관리 앱
+    │   ├── models.py           # AlertRule, AlertLog 모델
+    │   └── consumers.py        # (Django Channels) WebSocket 소비자
+    │
+    └── analytics/              # [Spark Result] 분석 리포트 앱
+        └── models.py           # Spark 결과 조회용 모델
+```

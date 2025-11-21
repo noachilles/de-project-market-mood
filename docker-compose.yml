@@ -38,6 +38,16 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
+  producers:
+    container_name: producers
+    build:
+      context: ./producers
+    volumes:
+      # 코드를 수정하면 바로 반영되도록 볼륨 연결
+      - ./producers:/app
+    depends_on:
+      - kafka
+
   # 3. Kafka UI
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -49,6 +59,36 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka:9092
+
+  # [추가] Flink JobManager (관리자)
+  flink-jobmanager:
+    build: ./flink-apps
+    ports:
+      - "8081:8081" # 웹 대시보드 포트
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+    volumes:
+      - ./flink-apps:/opt/flink/usrlib # 코드 동기화
+    depends_on:
+      - kafka
+      - postgres
+
+  # [추가] Flink TaskManager (일꾼)
+  flink-taskmanager:
+    build: ./flink-apps
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ./flink-apps:/opt/flink/usrlib
+    depends_on:
+      - flink-jobmanager
 
   # 4. Backend
   backend:
@@ -62,6 +102,19 @@ services:
       - ./back-end:/app
     depends_on:
       - kafka
+
+  postgres:
+    container_name: postgres
+    image: postgres:15
+    restart: always
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ssafyuser
+      POSTGRES_PASSWORD: ssafy
+      POSTGRES_DB: postgres
 
   # 5. Frontend
   frontend:
