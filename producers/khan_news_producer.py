@@ -10,7 +10,7 @@ from kafka import KafkaProducer
 from datetime import datetime
 
 # --- 설정 ---
-KAFKA_BROKER = 'localhost:9092'
+KAFKA_BROKER = 'kafka:9092'
 KAFKA_TOPIC = 'news_articles'
 
 RSS_URLS = {
@@ -20,7 +20,7 @@ RSS_URLS = {
 
 BASE_DIR = "/home/ssafy/heesoo"
 TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-CSV_FILE = os.path.join(BASE_DIR, f"khan_news_{TIMESTAMP}.csv")
+CSV_FILE = f'khan_news_{TIMESTAMP}.csv'
 CSV_FIELDS = ['category', 'published_at', 'title', 'link', 'summary', 'content']
 
 HEADERS = {
@@ -31,6 +31,7 @@ def create_producer():
     try:
         producer = KafkaProducer(
             bootstrap_servers=[KAFKA_BROKER],
+            api_version=(0, 10, 1),
             value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode('utf-8')
         )
         print("✅ Kafka Producer 연결 성공")
