@@ -1,0 +1,131 @@
+version: '3'
+
+services:
+  # 1. Zookeeper (Confluent 이미지 사용)
+  zookeeper-0:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: zookeeper-0
+    ports:
+      - 2181:2181
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  # 2. Kafka (Confluent 이미지 사용 - 100% 실행 보장)
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: kafka
+    depends_on:
+      - zookeeper-0
+    ports:
+      - 9094:9094 # 외부 접속 (localhost:9094)
+      - 9092:9092 # 내부 접속
+    environment:
+      # Confluent 설정 (Zookeeper 모드 자동 활성화)
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-0:2181
+      
+      # 리스너 설정
+      # INTERNAL: 컨테이너 간 통신 (backend -> kafka:9092)
+      # EXTERNAL: 외부 호스트 접속 (로컬 PC -> localhost:9094)
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      
+      # 단일 브로커 실행을 위한 필수 설정 (복제 계수 1)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  producers:
+    container_name: producers
+    build:
+      context: ./producers
+    volumes:
+      # 코드를 수정하면 바로 반영되도록 볼륨 연결
+      - ./producers:/app
+    depends_on:
+      - kafka
+
+  # 3. Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - 8080:8080
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka:9092
+
+  # [추가] Flink JobManager (관리자)
+  flink-jobmanager:
+    build: ./flink-apps
+    ports:
+      - "8081:8081" # 웹 대시보드 포트
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+    volumes:
+      - ./flink-apps:/opt/flink/usrlib # 코드 동기화
+    depends_on:
+      - kafka
+      - postgres
+
+  # [추가] Flink TaskManager (일꾼)
+  flink-taskmanager:
+    build: ./flink-apps
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 2
+    volumes:
+      - ./flink-apps:/opt/flink/usrlib
+    depends_on:
+      - flink-jobmanager
+
+  # 4. Backend
+  backend:
+    container_name: backend
+    build:
+      context: ./back-end
+    ports:
+      - "8000:8000"
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./back-end:/app
+    depends_on:
+      - kafka
+
+  postgres:
+    container_name: postgres
+    image: postgres:15
+    restart: always
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ssafyuser
+      POSTGRES_PASSWORD: ssafy
+      POSTGRES_DB: postgres
+
+  # 5. Frontend
+  frontend:
+    container_name: frontend
+    build:
+      context: ./front-end
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+networks:
+  default:
+    name: de-project-network
