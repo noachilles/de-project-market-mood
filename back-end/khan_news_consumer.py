@@ -7,7 +7,7 @@ consumer = KafkaConsumer(
     bootstrap_servers='kafka:9092',
     auto_offset_reset='earliest',  # 과거 메시지부터 읽기
     enable_auto_commit=False,
-    group_id='heesoo-' + str(int(time.time())),  # 매번 새로운 그룹 ID
+    group_id='feeds-' + str(int(time.time())),  # 매번 새로운 그룹 ID
     value_deserializer=lambda v: json.loads(v.decode('utf-8'))
 )
 
