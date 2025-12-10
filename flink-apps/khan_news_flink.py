@@ -13,19 +13,21 @@ def process_news_to_db():
             link STRING,
             summary STRING,
             content STRING,
-            published_at STRING
+            published_at STRING  -- Producer가 보내는 원본 날짜 문자열
         ) WITH (
             'connector' = 'kafka',
-            'topic' = 'khan-news',  -- Producer가 보내는 토픽명 확인
+            'topic' = 'news_articles',  -- [수정 1] Producer 토픽명과 일치시킴
             'properties.bootstrap.servers' = 'kafka:9092',
             'properties.group.id' = 'flink-db-group',
             'scan.startup.mode' = 'earliest-offset',
-            'format' = 'json'
+            'format' = 'json',
+            'json.fail-on-missing-field' = 'false', -- (안전장치) 없는 필드는 무시
+            'json.ignore-parse-errors' = 'true'     -- (안전장치) 파싱 에러 무시
         )
     """)
 
     # 2. Sink: PostgreSQL (DB 저장)
-    # (테이블명: feeds_news, 유저/비번: postgres/postgres)
+    # (주의: DB 접속 정보가 docker-compose.yml과 일치해야 함)
     t_env.execute_sql("""
         CREATE TABLE sink_postgres (
             title STRING,
@@ -35,16 +37,15 @@ def process_news_to_db():
             published_at TIMESTAMP(3)
         ) WITH (
             'connector' = 'jdbc',
-            'url' = 'jdbc:postgresql://postgres:5432/postgres',
-            'table-name' = 'feeds_news',
-            'username' = 'postgres',
-            'password' = 'postgres'
+            'url' = 'jdbc:postgresql://postgres:5432/postgres', -- [확인필요] DB이름
+            'table-name' = 'news',  -- back-end/feeds/models.py의 News/Meta 확인
+            'username' = 'ssafyuser',  -- [확인필요] 유저명
+            'password' = 'ssafy'   -- [확인필요] 비밀번호
         )
     """)
 
-    # 3. 데이터 이동 (String 날짜 -> Timestamp 변환)
-    # TO_TIMESTAMP 함수로 날짜 포맷을 맞춰줍니다. (Producer 형식에 따라 수정 필요)
-    # 예: "2023-11-21T08:00:00Z" 형태라면 아래 포맷 사용
+    # 3. 데이터 이동 (날짜 포맷 수정)
+    # [수정 2] 'X'는 +09:00이나 Z 같은 타임존을 처리해줍니다.
     t_env.execute_sql("""
         INSERT INTO sink_postgres
         SELECT 
@@ -52,7 +53,7 @@ def process_news_to_db():
             link,
             summary,
             content,
-            TO_TIMESTAMP(published_at, 'yyyy-MM-ddTHH:mm:ss') 
+            TO_TIMESTAMP(published_at, 'yyyy-MM-dd''T''HH:mm:ssXXX') - INTERVAL '9' HOUR
         FROM source_kafka
     """)
 
