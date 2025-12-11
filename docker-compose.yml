@@ -39,14 +39,20 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
   producers:
-    container_name: producers
     build:
       context: ./producers
+    container_name: producers
+    restart: always
+    command: python producer_with_AI.py
+    environment:
+      - PYTHONUNBUFFERED=1
     volumes:
       # 코드를 수정하면 바로 반영되도록 볼륨 연결
       - ./producers:/app
     depends_on:
       - kafka
+    env_file:
+      - .env
 
   # 3. Kafka UI
   kafka-ui:
@@ -70,11 +76,18 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
     volumes:
       - ./flink-apps:/opt/flink/usrlib # 코드 동기화
     depends_on:
       - kafka
       - postgres
+    env_file:
+      - .env
 
   # [추가] Flink TaskManager (일꾼)
   flink-taskmanager:
@@ -85,10 +98,17 @@ services:
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 2
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
     volumes:
       - ./flink-apps:/opt/flink/usrlib
     depends_on:
       - flink-jobmanager
+    env_file:
+      - .env
 
   # 4. Backend
   backend:
