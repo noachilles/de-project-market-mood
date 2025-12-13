@@ -1,20 +1,23 @@
 <template>
-
-  <!-- 기존 종목 헤더 (두 번째 파란 카드) -->
-  <header class="header">
+  <!-- stock이 아직 없거나 로딩 중이면 fallback -->
+  <header class="header" v-if="stock">
     <div class="header-left">
       <div class="ticker-row">
-        <div class="symbol">삼성전자</div>
-        <div class="code">(005930)</div>
+        <div class="symbol">{{ stock.name }}</div>
+        <div class="code">({{ stock.ticker }})</div>
       </div>
 
       <div class="price-row">
-        <div class="price-main">85,300원</div>
-        <div class="change-pill">
-          <span>▲</span>
-          <span>+2.55%</span>
+        <div class="price-main">{{ formatKRW(stock.price) }}</div>
+
+        <div class="change-pill" :class="toneClass(stock.change)">
+          <span>{{ stock.change >= 0 ? "▲" : "▼" }}</span>
+          <span>{{ formatChange(stock.change) }}</span>
         </div>
-        <div class="volume">거래량: 1,250,000주</div>
+
+        <div class="volume">
+          거래량: {{ (stock.volume ?? 0).toLocaleString("ko-KR") }}주
+        </div>
       </div>
     </div>
 
@@ -27,91 +30,38 @@
       </button>
     </div>
   </header>
+
+  <!-- fallback UI (에러 방지용) -->
+  <header class="header" v-else>
+    <div class="header-left">
+      <div class="ticker-row">
+        <div class="symbol">종목 로딩 중…</div>
+      </div>
+    </div>
+  </header>
 </template>
 
 <script setup>
-import { ref } from "vue"
+const props = defineProps({
+  stock: {
+    type: Object,
+    default: null, // ✅ required 제거 + 안전 처리
+  },
+});
 
-const keyword = ref("")
-
-const search = () => {
-  if (!keyword.value.trim()) return
-  alert(`검색: ${keyword.value}`)
+function formatKRW(n) {
+  return Number(n || 0).toLocaleString("ko-KR") + "원";
+}
+function formatChange(v) {
+  const num = Number(v || 0);
+  return (num >= 0 ? "+" : "") + num.toFixed(2) + "%";
+}
+function toneClass(v) {
+  return Number(v || 0) >= 0 ? "pos" : "neg";
 }
 </script>
 
 <style scoped>
-/* 최상단 네비게이션 바 */
-.top-nav {
-  width: 100%;
-  padding: 14px 28px;
-  background: rgba(17, 34, 64, 0.85);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  backdrop-filter: blur(8px);
-}
-
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-/* 로고 */
-.logo {
-  font-size: 20px;
-  font-weight: 700;
-  color: #e6edff;
-}
-
-/* 검색박스 */
-.search-box {
-  display: flex;
-  align-items: center;
-  background: rgba(255,255,255,0.08);
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.08);
-}
-
-.search-box input {
-  border: none;
-  outline: none;
-  background: transparent;
-  color: #e6edff;
-  font-size: 14px;
-  width: 180px;
-}
-
-.search-box button {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: #e6edff;
-  font-size: 16px;
-  margin-left: 6px;
-}
-
-.nav-right {
-  display: flex;
-  align-items: center;
-}
-
-/* 로그인 버튼 */
-.login-btn {
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: 0.15s;
-}
-
-.login-btn:hover {
-  background: #2563eb;
-}
+.change-pill.pos { color: #4ade80; }
+.change-pill.neg { color: #fecaca; }
 </style>
