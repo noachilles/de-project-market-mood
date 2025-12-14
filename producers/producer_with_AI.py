@@ -191,6 +191,8 @@ schedule.every(10).minutes.do(job)
 
 if __name__ == "__main__":
     job() # 시작 시 1회 즉시 실행
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+
+    # 자동화 시 아래 코드로 실행
+    # while True:
+        # schedule.run_pending()
+        # time.sleep(1)
