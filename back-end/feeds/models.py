@@ -11,11 +11,13 @@ class News(models.Model):
     # CharField는 길이 제한이 있으므로, 제한 없는 TextField 사용
     content = models.TextField(blank=True, null=True, verbose_name="기사 본문 전체")
 
-    # 3. 분석 결과 (Flink/Spark가 채워넣을 곳)
-    sentiment_score = models.FloatField(null=True, blank=True, verbose_name="감정 점수")
-    # 예: "HBM, 반도체, 실적" (분석된 키워드 저장)
-    topics = models.JSONField(null=True, blank=True, verbose_name="주요 토픽") 
-
+    summary = models.TextField(null=True, blank=True)         # 3줄 요약
+    keywords = models.CharField(max_length=200, null=True, blank=True)
+    related_symbols = models.CharField(max_length=200, null=True, blank=True) # "US:NVDA,KR:005930"
+    source = models.CharField(max_length=50, null=True, blank=True)   # Google, MK 등
+    sentiment = models.CharField(max_length=20, null=True, blank=True) # Positive/Negative
+    reason = models.TextField(null=True, blank=True)          # 연결 이유
+    
     class Meta:
         db_table = 'news'
         ordering = ['-published_at'] # 최신순 정렬
