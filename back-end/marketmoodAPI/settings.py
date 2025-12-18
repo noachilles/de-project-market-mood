@@ -131,3 +131,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# 한국투자증권 설정
+KIS_APP_KEY = os.environ.get("KIS_APP_KEY")
+KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET")
+KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO") # 계좌번호 앞 8자리
+KIS_BASE_URL = "https://openapi.koreainvestment.com:9443" # 실전투자
+# KIS_BASE_URL = "https://openapivts.koreainvestment.com:29443" # 모의투자 (포트 다름 주의)
