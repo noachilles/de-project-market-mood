@@ -2,7 +2,17 @@
   <header class="global-header">
     <div class="header-content">
       <!-- 왼쪽: 로고 -->
-      <div class="logo">MarketMood</div>
+      <div class="left-area">
+      <div class="logo" @click="goDashboard">MarketMood</div>
+
+      <button
+        v-if="route.path !== '/stocks'"
+        class="nav-btn"
+        @click="goStocks"
+      >
+        📋 전체 종목
+      </button>
+    </div>
 
       <!-- 오른쪽: 검색창 + 로그인/유저메뉴 -->
       <div class="right-area">
@@ -58,6 +68,18 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import LoginModal from "@/components/auth/LoginModal.vue";
+import { useRouter, useRoute } from "vue-router";
+
+/* 라우터 */
+const router = useRouter();
+const route = useRoute();
+
+function goStocks() {
+  router.push("/stocks");
+}
+function goDashboard() {
+  router.push("/dashboard");
+}
 
 /* 검색 */
 const keyword = ref("");
@@ -160,6 +182,7 @@ function goSettings() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24px;
 }
 
 /* 로고 */
@@ -176,14 +199,16 @@ function goSettings() {
   flex-direction: row;
   align-items: center;
   gap: 16px;
+  flex: 1;
+  justify-content: flex-end;
 }
 
 /* 검색박스 */
 .search-box {
   display: flex;
   align-items: center;
-  width: 320px;
-  padding: 8px 14px;
+  width: min(520px, 52vw);
+  padding: 10px 16px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
@@ -295,5 +320,34 @@ function goSettings() {
 }
 .dropdown-item.danger:hover {
   background: rgba(248,113,113,0.14);
+}
+.left-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 0 0 auto;
+  min-width: 240px;
+}
+
+.logo {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6edff;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+  transition: 0.2s;
+}
+
+.nav-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  transform: translateY(-1px);
 }
 </style>

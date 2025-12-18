@@ -1,6 +1,7 @@
-// src/main.js
-import { createApp } from 'vue'
-import App from './App.vue'
-import './assets/dashboard.css'
+import { createApp } from "vue";
+import App from "./App.vue";
+import router from "./router";
+import "@/assets/dashboard.css";
 
-createApp(App).mount('#app')
+
+createApp(App).use(router).mount("#app");
