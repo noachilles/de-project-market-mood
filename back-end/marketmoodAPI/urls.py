@@ -14,9 +14,17 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+# back-end/config/urls.py
+
 from django.contrib import admin
 from django.urls import path
+from stock import views  # 👈 stock 앱의 views를 가져옴
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    
+    # 1. 아무것도 없는 주소('')로 들어오면 index 뷰를 보여줘라
+    path('', views.index, name='index'), 
+    
+    # (혹은 path('stock/', views.index) 로 하면 localhost:8000/stock/ 으로 접속)
 ]

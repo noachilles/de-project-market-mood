@@ -118,6 +118,8 @@ services:
     ports:
       - "8000:8000"
     command: python manage.py runserver 0.0.0.0:8000
+    env_file:
+      - .env
     volumes:
       - ./back-end:/app
     depends_on:
@@ -146,6 +148,31 @@ services:
     depends_on:
       - backend
 
+  # -- 웹소켓 내용
+  websocket-server:
+    image: python:3.9-slim
+    depends_on:
+      - kafka
+    volumes:
+      - ./server.py:/app/server.py  # 로컬의 server.py를 컨테이너 내부로 맵핑
+    working_dir: /app
+    ports:
+      - "8765:8765" # 브라우저가 접속할 포트
+    command: >
+      bash -c "pip install websockets kafka-python && python server.py"
+
+  kis-producers:
+    build: ./back-end
+    command: python kis_producer.py  # 루트에 있는 독립 파일
+    volumes:
+        - .:/app
+    env_file:
+        - .env
+    depends_on:
+        - kafka
+    restart: on-failure  # Kafka 켜질 때까지 재시도
+
 networks:
   default:
     name: de-project-network
+

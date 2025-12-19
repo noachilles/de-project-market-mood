@@ -1,116 +1,135 @@
-import os
-import sys
-import json
-import asyncio
+# producer.py (최종 자동화 버전)
 import websockets
-import django
+import json
+import os
+import asyncio
+import time
+import requests # requests 라이브러리 필요
 from kafka import KafkaProducer
-import requests
+from dotenv import load_dotenv
 
-# ---------------------------------------------------------
-# [Django 환경 설정 로드]
-# ---------------------------------------------------------
-# 1. 현재 경로를 시스템 경로에 추가 (모듈 import 문제 방지)
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 1. 환경변수 로드
+load_dotenv()
 
-# 2. Django 설정 모듈 지정 (프로젝트명.settings 로 수정 필수!)
-# 예: 프로젝트 폴더명이 'config'라면 'config.settings'
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings") 
-
-# 3. Django 초기화 (settings.py 로드)
-django.setup()
-
-# 4. settings import (django.setup() 이후에 해야 함)
-from django.conf import settings
-# ---------------------------------------------------------
-
-# settings.py에서 가져온 변수 사용
-APP_KEY = settings.KIS_APP_KEY
-APP_SECRET = settings.KIS_APP_SECRET
-# STOCK_CODE 등도 settings로 뺄 수 있지만, 편의상 여기 둠
-STOCK_CODE = "005930" 
+# .env에 있는 기본 키 가져오기
+APP_KEY = os.getenv("KIS_APP_KEY")
+APP_SECRET = os.getenv("KIS_APP_SECRET")
 
 # Kafka 설정
-KAFKA_BROKER = 'localhost:9092'
-TOPIC_NAME = 'realtime-data'
+KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
+KAFKA_TOPIC = 'stock_updates'
 
-def get_approval_key():
-    url = "https://openapi.koreainvestment.com:9443/oauth2/Approval"
-    headers = {"content-type": "application/json; utf-8"}
+# -----------------------------------------------------------
+# 2. 웹소켓 접속키(Approval Key) 자동 발급 함수
+# -----------------------------------------------------------
+def get_approval_key(key, secret):
+    # 모의투자 URL
+    url = "https://openapivts.koreainvestment.com:29443/oauth2/Approval"
+    headers = {"content-type": "application/json"}
     body = {
         "grant_type": "client_credentials",
-        "appkey": APP_KEY,
-        "secretkey": APP_SECRET
+        "appkey": key,
+        "secretkey": secret
     }
+    
+    print("🔑 웹소켓 접속키 발급 요청 중...")
     try:
         res = requests.post(url, headers=headers, data=json.dumps(body))
-        res.raise_for_status()
-        return res.json()["approval_key"]
+        if res.status_code == 200:
+            return res.json()["approval_key"]
+        else:
+            raise Exception(f"발급 실패: {res.text}")
     except Exception as e:
-        print(f"Approval Key 발급 실패: {e}")
-        sys.exit(1)
+        print(f"❌ 키 발급 중 에러 발생: {e}")
+        exit(1)
 
-# Kafka Producer
-producer = KafkaProducer(
-    bootstrap_servers=[KAFKA_BROKER],
-    value_serializer=lambda x: json.dumps(x).encode('utf-8')
-)
+# -----------------------------------------------------------
+# 3. 메인 로직
+# -----------------------------------------------------------
+async def connect():
+    # [자동 발급] 실행할 때마다 새로운 키를 받아옵니다.
+    APPROVAL_KEY = get_approval_key(APP_KEY, APP_SECRET)
+    print(f"✅ 접속키 확보 완료: {APPROVAL_KEY[:10]}...")
 
-async def connect_kis_websocket():
-    approval_key = get_approval_key()
-    print(f"Approval Key 발급 완료: {approval_key[:10]}...")
+    # Kafka 연결 (재시도 로직)
+    producer = None
+    for i in range(10):
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+                value_serializer=lambda x: json.dumps(x).encode('utf-8'),
+                acks=0
+            )
+            print("✅ Kafka Connected!")
+            break
+        except:
+            print(f"⏳ Kafka 연결 대기 중... ({i+1}/10)")
+            time.sleep(3)
+    
+    if not producer:
+        print("❌ Kafka 연결 실패")
+        return
 
-    # 실전: ws://ops.koreainvestment.com:21000
-    # 모의: ws://ops.koreainvestment.com:31000
-    uri = "ws://ops.koreainvestment.com:21000"
+    # 웹소켓 접속
+    uri = "ws://ops.koreainvestment.com:31000"
 
     async with websockets.connect(uri, ping_interval=None) as websocket:
-        print("KIS WebSocket Connected!")
+        print("✅ WebSocket Connected to KIS!")
 
-        data = {
+        # 구독 요청
+        send_data = {
             "header": {
-                "approval_key": approval_key,
+                "approval_key": APPROVAL_KEY, # 자동 발급된 키 사용
                 "custtype": "P",
                 "tr_type": "1",
                 "content-type": "utf-8"
             },
+            # 한국장 주식 (9:00 ~ 15:30)
+            # "body": {
+            #     "input": {
+            #         "tr_id": "H0STCNT0",
+            #         "tr_key": "005930" 
+            #     }
+            # }
+            
+            # 미국장 주식 (18:00 ~)
             "body": {
                 "input": {
-                    "tr_id": "H0STCNT0",
-                    "tr_key": STOCK_CODE
+                "tr_id": "HDFSCNT0",   # 해외주식 실시간 체결가 ID
+                "tr_key": "DNASTSLA"   # D(구분) + NAS(나스닥) + TSLA(티커)
                 }
             }
         }
-        await websocket.send(json.dumps(data))
-        print(f"구독 요청 보냄: {STOCK_CODE}")
+
+        # 공백 제거 필수
+        await websocket.send(json.dumps(send_data, separators=(',', ':'), ensure_ascii=False))
+        print("📨 구독 요청 전송 완료")
 
         while True:
             try:
                 recv_data = await websocket.recv()
                 
-                # 데이터 전처리 및 전송
+                # ** PINGPONG 처리 (가장 중요) - 데이터 전송 확인
+                if 'PINGPONG' in recv_data:
+                    # PONG으로 답장 보내기 (데이터 그대로 다시 전송)
+                    await websocket.send(recv_data)
+                    print(f"🏓 PONG Sent! (Connection Alive)")
+                    continue # 다음 루프로
+
                 if recv_data[0] in ['0', '1']:
-                    # 실제 체결 데이터 파싱 로직은 필요에 따라 추가
-                    # print(f"[KIS] {recv_data}") 
-                    
-                    msg_dict = {
-                        "source": "KIS",
-                        "code": STOCK_CODE,
-                        "raw_data": recv_data
-                    }
-                    
-                    producer.send(TOPIC_NAME, value=msg_dict)
-                    producer.flush() # 즉시 전송
-                    
-            except websockets.exceptions.ConnectionClosed:
-                print("연결 끊김, 재접속 필요")
-                break
+                    # 실시간 데이터 처리
+                    splitted = recv_data.split('|')
+                    if len(splitted) > 3:
+                        raw_data = splitted[3]
+                        producer.send(KAFKA_TOPIC, value={'message': raw_data})
+                        print(f"🚀 Data Sent: {raw_data[:20]}...")
+                else:
+                    # 시스템 메시지 (PINGPONG 등)
+                    print(f"🔔 System: {recv_data}")
+
             except Exception as e:
-                print(f"에러 발생: {e}")
+                print(f"Error: {e}")
+                break
 
 if __name__ == "__main__":
-    # 프로젝트명 수정 확인
-    if os.environ.get("DJANGO_SETTINGS_MODULE") == "config.settings":
-        print("⚠️ 주의: 'config.settings'가 실제 프로젝트명과 맞는지 확인하세요.")
-        
-    asyncio.run(connect_kis_websocket())
+    asyncio.run(connect())
