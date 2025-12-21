@@ -195,3 +195,7 @@ postgres-data/
 
 # End of https://www.toptal.com/developers/gitignore/api/django,venv,vuejs
 postgres-data/
+
+# Docker Volume Data (DB 데이터, 로그 등)
+data/volumes/
+data/config/
