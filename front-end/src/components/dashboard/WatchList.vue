@@ -23,7 +23,7 @@ function toneClass(v) {
 
 <template>
   <!-- 관심종목 리스트 카드 -->
-  <div class="card">
+  <div class="card watchlist-card">
     <div class="card-header">
       <div class="card-title">내 관심종목 리스트</div>
       <div class="card-sub">실시간 변화율 기준</div>
