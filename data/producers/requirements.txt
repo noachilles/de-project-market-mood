@@ -1,0 +1,6 @@
+kafka-python
+websocket-client
+requests
+feedparser
+python-dotenv
+# hdfs # 나중에 필요하면 주석 해제
