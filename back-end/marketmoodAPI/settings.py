@@ -12,21 +12,28 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# env 파일 사용을 위한 기본 셋팅
+env_path = BASE_DIR.parent / ".env"
+
+# 명시적으로 경로 지정해 로드
+load_dotenv(dotenv_path=env_path)
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure--gziwuqh1ric3yu3kw^4v%0wj0ast3d(x-lrq-_kk4rr2z+r%z'
+SECRET_KEY = os.environ.get("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -36,7 +43,7 @@ INSTALLED_APPS = [
     'alerts',
     'analytics',
     'feeds',
-    'stocks',
+    'stock',
     
     'django.contrib.admin',
     'django.contrib.auth',
@@ -131,3 +138,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# 한국투자증권 설정
+KIS_APP_KEY = os.environ.get("KIS_APP_KEY")
+KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET")
+KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO") # 계좌번호 앞 8자리
+KIS_BASE_URL = "https://openapi.koreainvestment.com:9443" # 실전투자
+# KIS_BASE_URL = "https://openapivts.koreainvestment.com:29443" # 모의투자 (포트 다름 주의)
