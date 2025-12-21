@@ -1,18 +1,21 @@
 <template>
   <div class="card">
-    <div class="card-header">
-      <div>
-        <div class="card-title">Real-time Stock ({{ labelRange }})</div>
-        <div class="card-sub">Price · Sentiment · Flow 통합 · {{ ticker }}</div>
+    <div class="card-header chart-header">
+      <div class="chart-headline">
+        <div>
+          <div class="card-title">Real-time Stock ({{ labelRange }})</div>
+          <div class="card-sub">Price · Sentiment · Flow 통합 · {{ ticker }}</div>
+        </div>
       </div>
 
-      <div class="range-tabs">
+      <div class="range-tabs range-tabs--below" aria-label="기간 선택">
         <button
           v-for="item in ranges"
           :key="item.value"
           class="range-btn"
           :class="{ active: range === item.value }"
           @click="changeRange(item.value)"
+          type="button"
         >
           {{ item.label }}
         </button>
@@ -32,232 +35,236 @@
     </div>
 
     <p class="tooltip-note">
-      차트 위 시점을 마우스로 올리면 해당 시점의 <strong>뉴스 요약</strong>이 표시됩니다.
+      차트 위 시점을 마우스로 올리면 해당 시점의
+      <strong>뉴스 요약</strong>이 표시됩니다.
     </p>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 
 Chart.register(...registerables);
 
-/* ✅ Dashboard에서 받는 ticker */
 const props = defineProps({
   ticker: { type: String, required: true },
 });
 
+const ticker = computed(() => props.ticker);
+
 const chartCanvas = ref(null);
 let chartInstance = null;
 
-/* ------------------ 기간 ------------------ */
-const range = ref("1y");
+const range = ref("6m");
 const ranges = [
-  { value: "1d", label: "1일" }, { value: "1w", label: "1주" },
-  { value: "1m", label: "1달" }, { value: "3m", label: "3달" },
-  { value: "6m", label: "6달" }, { value: "1y", label: "1년" },
-  { value: "5y", label: "5년" }, { value: "all", label: "전체" }
+  { value: "rt", label: "실시간" },
+  { value: "1d", label: "1일" },
+  { value: "1w", label: "1주" },
+  { value: "1m", label: "1달" },
+  { value: "3m", label: "3달" },
+  { value: "6m", label: "6달" },
+  { value: "1y", label: "1년" },
 ];
 
-const labelRange = computed(() => ({
-  "1d": "1일", "1w": "1주", "1m": "1달",
-  "3m": "3달", "6m": "6달", "1y": "1년",
-  "5y": "5년", "all": "전체"
-}[range.value]));
-
-/* ------------------ 공통 라벨 ------------------ */
-const labelsBase = [
-  "1월","2월","3월","4월","5월","6월",
-  "7월","8월","9월","10월","11월","12월"
-];
-
-/* ------------------ ✅ ticker별 더미 데이터(임시) ------------------ */
-const dummyByTicker = {
-  "005930": {
-    price: [70,72,69,75,78,80,82,86,83,88,90,92],
-    sentiment: [40,45,48,55,60,58,62,70,65,72,75,78],
-    flow: [50,-20,10,30,60,-10,40,80,-25,35,45,65],
-    news: [
-      "1월: AI 서버 수요 둔화 우려에도 견조한 실적 전망.",
-      "2월: 북미 데이터센터향 신규 HBM 수주 공시.",
-      "3월: 매크로 불확실성으로 단기 변동성 확대.",
-      "4월: AI GPU 공급 부족, 관련주 동반 강세.",
-      "5월: 해외 리포트 Top Pick 선정.",
-      "6월: 환율 부담 부각, 외국인 매도.",
-      "7월: HBM3E 양산 계획 발표.",
-      "8월: 글로벌 빅테크와 장기 공급 계약 기대.",
-      "9월: 단기 차익 실현 구간.",
-      "10월: 실적 서프라이즈.",
-      "11월: 업황 회복 기조.",
-      "12월: CAPEX 확대 계획 발표."
-    ],
-  },
-  "000660": {
-    // SK하이닉스는 패턴이 좀 다르게 보여주기 (변화 확인용)
-    price: [120,118,121,125,130,128,126,132,129,127,131,135],
-    sentiment: [55,52,50,48,46,49,51,47,45,44,46,48],
-    flow: [-10,-30,5,15,20,-25,-15,10,-40,-5,8,12],
-    news: [
-      "1월: 메모리 업황 둔화 우려로 약세.",
-      "2월: 고객사 재고 조정 이슈 재부각.",
-      "3월: 환율 영향으로 변동성 확대.",
-      "4월: HBM 관련 기대감 일부 반영.",
-      "5월: 공급사와 단가 협상 뉴스.",
-      "6월: 기관 매도 우위 지속.",
-      "7월: 업황 바닥론 제기.",
-      "8월: 경쟁사 증설 우려.",
-      "9월: 단기 반등 후 조정.",
-      "10월: 실적 컨센서스 하향.",
-      "11월: 내년 수요 전망 혼재.",
-      "12월: 수주 모멘텀 점검 필요."
-    ],
-  },
-};
-
-/* ------------------ ✅ 현재 ticker 데이터 선택 ------------------ */
-const currentData = computed(() => {
-  return dummyByTicker[props.ticker] ?? dummyByTicker["005930"];
+const labelRange = computed(() => {
+  const map = {
+    rt: "실시간",
+    "1d": "1일",
+    "1w": "1주",
+    "1m": "1달",
+    "3m": "3달",
+    "6m": "6달",
+    "1y": "1년",
+  };
+  return map[range.value] ?? "1년";
 });
 
-/* ------------------ count 계산 ------------------ */
-function getCountByRange(v) {
-  return {
-    "1d": 1, "1w": 2, "1m": 3,
-    "3m": 4, "6m": 6, "1y": 12,
-    "5y": 12, "all": 12
-  }[v] ?? 12;
+const RANGE_SPEC = {
+  rt: { stepMs: 1_000, points: 60, unit: "second" },
+  "1d": { stepMs: 60 * 60 * 1_000, points: 24, unit: "hour" },
+  "1w": { stepMs: 24 * 60 * 60 * 1_000, points: 7, unit: "day" },
+  "1m": { stepMs: 3 * 24 * 60 * 60 * 1_000, points: 10, unit: "day" },
+  "3m": { stepMs: 7 * 24 * 60 * 60 * 1_000, points: 13, unit: "week" },
+  "6m": { stepMs: 14 * 24 * 60 * 60 * 1_000, points: 13, unit: "week" },
+  "1y": { stepMs: 30 * 24 * 60 * 60 * 1_000, points: 12, unit: "month" },
+};
+
+const baseByTicker = {
+  "005930": { price: 85000, sentiment: 62, flow: 30 },
+  "000660": { price: 150000, sentiment: 48, flow: -10 },
+};
+
+function genSeries({ basePrice, baseSent, baseFlow, points, stepMs }) {
+  const now = Date.now();
+  const out = [];
+
+  let p = basePrice;
+  let s = baseSent;
+  let f = baseFlow;
+
+  for (let i = points - 1; i >= 0; i--) {
+    const t = now - i * stepMs;
+
+    p = Math.max(1, p + (Math.random() - 0.5) * basePrice * 0.002);
+    s = Math.min(100, Math.max(0, s + (Math.random() - 0.5) * 6));
+    f = f + (Math.random() - 0.5) * 40;
+
+    out.push({
+      x: t,
+      price: Math.round(p),
+      sentiment: Math.round(s),
+      flow: Math.round(f),
+      news: `뉴스 요약(${new Date(t).toLocaleString()}): 더미 데이터`,
+    });
+  }
+  return out;
 }
 
-/* ------------------ 차트 렌더링 ------------------ */
-function buildChart(count = 12) {
+const series = computed(() => {
+  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
+  const base = baseByTicker[ticker.value] ?? baseByTicker["005930"];
+  return genSeries({
+    basePrice: base.price,
+    baseSent: base.sentiment,
+    baseFlow: base.flow,
+    points: spec.points,
+    stepMs: spec.stepMs,
+  });
+});
+
+/* ✅ 한 프레임 뒤에 실행(레이아웃 0 높이 방지) */
+function raf() {
+  return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+async function buildChartSafe() {
   if (!chartCanvas.value) return;
 
+  await nextTick();
+  await raf();
+
+  // canvas가 0 높이면 한 번 더 기다림
+  const parent = chartCanvas.value.parentElement;
+  if (parent && parent.clientHeight === 0) {
+    await raf();
+  }
+
   const ctx = chartCanvas.value.getContext("2d");
-  const d = currentData.value;
+  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
+  const d = series.value;
 
-  // ✅ 차트가 이미 있으면 destroy 후 재생성 (확실하게 갱신)
-  if (chartInstance) chartInstance.destroy();
-
-  chartInstance = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: labelsBase.slice(0, count),
-      datasets: [
-        {
-          type: "line",
-          label: "Price",
-          data: d.price.slice(0, count),
-          borderColor: "#60a5fa",
-          backgroundColor: "rgba(96,165,250,0.25)",
-          tension: 0.3,
-          borderWidth: 2,
-          pointRadius: 3,
-          yAxisID: "yPrice",
-        },
-        {
-          type: "line",
-          label: "Sentiment",
-          data: d.sentiment.slice(0, count),
-          borderColor: "#fb923c",
-          borderDash: [4, 3],
-          borderWidth: 2,
-          pointRadius: 2,
-          tension: 0.3,
-          yAxisID: "ySentiment",
-        },
-        {
-          type: "bar",
-          label: "Flow",
-          data: d.flow.slice(0, count),
-          yAxisID: "yFlow",
-          backgroundColor: (ctx) => {
-            const v = ctx.raw;
-            return v >= 0
-              ? "rgba(74,222,128,0.45)"
-              : "rgba(248,113,113,0.45)";
+  try {
+    chartInstance?.destroy();
+    chartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        datasets: [
+          {
+            type: "line",
+            label: "Price",
+            data: d.map((r) => ({ x: r.x, y: r.price })),
+            yAxisID: "yPrice",
+            borderColor: "#60a5fa",
+            backgroundColor: "rgba(96,165,250,0.18)",
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.25,
           },
-          borderRadius: 4,
-          barPercentage: 0.65,
-          categoryPercentage: 0.75,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "rgba(15,23,42,0.96)",
-          borderColor: "rgba(148,163,184,0.8)",
-          borderWidth: 1,
-          padding: 10,
-          titleColor: "#e5e7eb",
-          bodyColor: "#e5e7eb",
-          footerColor: "#9ca3af",
-          callbacks: {
-            footer: (items) => {
-              const idx = items?.[0]?.dataIndex ?? 0;
-              const msg = d.news?.[idx] ?? "뉴스 요약 데이터가 없습니다.";
-              return "뉴스 요약: " + msg;
+          {
+            type: "line",
+            label: "Sentiment",
+            data: d.map((r) => ({ x: r.x, y: r.sentiment })),
+            yAxisID: "ySentiment",
+            borderColor: "#fb923c",
+            borderDash: [4, 3],
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.25,
+          },
+          {
+            type: "bar",
+            label: "Flow",
+            data: d.map((r) => ({ x: r.x, y: r.flow })),
+            yAxisID: "yFlow",
+            backgroundColor: (ctx) => {
+              const v = ctx.raw?.y ?? 0;
+              return v >= 0 ? "rgba(74,222,128,0.45)" : "rgba(248,113,113,0.45)";
+            },
+            borderRadius: 4,
+            barPercentage: 0.7,
+            categoryPercentage: 0.9,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(15,23,42,0.96)",
+            callbacks: {
+              footer: (items) => {
+                const idx = items?.[0]?.dataIndex ?? 0;
+                const msg = d?.[idx]?.news ?? "뉴스 요약 데이터가 없습니다.";
+                return "뉴스 요약: " + msg;
+              },
             },
           },
         },
+        scales: {
+          x: {
+            type: "time",
+            time: { unit: spec.unit },
+            ticks: { color: "#9ca3af", font: { size: 11 }, maxTicksLimit: 8 },
+            grid: { display: false },
+          },
+          yPrice: {
+            position: "left",
+            ticks: { color: "#9ca3af" },
+            grid: { color: "rgba(55,65,81,0.55)" },
+          },
+          ySentiment: {
+            position: "right",
+            display: false,
+            suggestedMin: 0,
+            suggestedMax: 100,
+          },
+          yFlow: {
+            position: "right",
+            display: false,
+          },
+        },
       },
-      scales: {
-        x: {
-          ticks: { color: "#9ca3af", font: { size: 11 } },
-          grid: { display: false },
-        },
-        yPrice: {
-          position: "left",
-          ticks: { color: "#9ca3af" },
-          grid: { color: "rgba(55,65,81,0.55)" },
-        },
-        ySentiment: {
-          position: "right",
-          display: false,
-          suggestedMin: 0,
-          suggestedMax: 100,
-        },
-        yFlow: {
-          position: "right",
-          display: false,
-          suggestedMin: Math.min(...d.flow) - 20,
-          suggestedMax: Math.max(...d.flow) + 20,
-        },
-      },
-    },
-  });
+    });
+  } catch (e) {
+    console.error("[StockChart] buildChart failed:", e);
+  }
 }
 
-/* ------------------ 기간 변경 ------------------ */
+watch([ticker, range], () => {
+  buildChartSafe();
+});
+
+onMounted(() => {
+  buildChartSafe();
+});
+
+onBeforeUnmount(() => {
+  chartInstance?.destroy();
+});
+
 function changeRange(v) {
   range.value = v;
-  buildChart(getCountByRange(v));
 }
-
-/* ------------------ ✅ ticker/range 변경 감지 ------------------ */
-watch(
-  () => props.ticker,
-  () => {
-    // ticker 바뀌면 현재 range 기준으로 다시 그리기
-    buildChart(getCountByRange(range.value));
-  }
-);
-
-watch(
-  () => range.value,
-  (v) => {
-    // range 바뀌면 현재 ticker 기준으로 다시 그리기
-    buildChart(getCountByRange(v));
-  }
-);
-
-/* ------------------ Lifecycle ------------------ */
-onMounted(() => buildChart(getCountByRange(range.value)));
-onBeforeUnmount(() => chartInstance?.destroy());
 </script>
+
+<style scoped>
+/* ✅ 차트가 사라지는 1순위 원인: wrapper 높이 0 방지 */
+.chart-wrapper {
+  min-height: 320px;
+}
+</style>

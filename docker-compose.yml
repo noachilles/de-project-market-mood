@@ -205,7 +205,7 @@ services:
     container_name: backend
     build:
       context: ./back-end
-      dockerfile: Dockerfile
+      dockerfile: api/Dockerfile
     ports:
       - "8000:8000"
     working_dir: /app
