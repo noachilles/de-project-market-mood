@@ -3,4 +3,6 @@ websocket-client
 requests
 feedparser
 python-dotenv
+python-dateutil
+beautifulsoup4
 # hdfs # 나중에 필요하면 주석 해제

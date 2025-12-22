@@ -170,21 +170,17 @@ services:
   # 4. App Layer (수집 및 서비스)
   # =========================================
   
-  # [12] Producers: 한투 API 및 RSS에서 데이터를 수집해 Kafka로 보내는 파이썬 수집기
-  producers:
+  # [12] news-producers: RSS에서 데이터를 수집해 Kafka로 보내는 파이썬 수집기
+  news-producer:
+    container_name: news-producer
     build:
-      context: ./data/producers
-    container_name: producers
-    restart: always
-    command: /bin/bash run.sh
-    environment:
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./data/producers:/app
+      context: ./data/producers  # 여기에 Dockerfile과 requirements.txt가 있어야 함
+    image: my-news-producer:1.0
     depends_on:
       - kafka
-    env_file:
-      - .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: always
 
   # [13] Websocket Server: 실시간 데이터를 브라우저로 즉시 밀어주는 중계 서버
   websocket-server:

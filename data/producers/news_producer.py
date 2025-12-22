@@ -1,96 +1,109 @@
-import feedparser
-import requests
-from bs4 import BeautifulSoup
-import time
-import random
-import json
-import csv
 import os
+import time
+import json
+import logging
+import feedparser
 from kafka import KafkaProducer
 from datetime import datetime
+from dateutil import parser as date_parser
+from bs4 import BeautifulSoup  # HTML 태그 제거용 (구글 뉴스 등)
 
-# --- 설정 ---
-KAFKA_BROKER = 'kafka:9092'
-KAFKA_TOPIC = 'news_articles'
+# 로그 설정
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-RSS_URLS = {
-    "경제": "https://www.khan.co.kr/rss/rssdata/economy_news.xml",
-    "국제": "https://www.khan.co.kr/rss/rssdata/kh_world.xml",
+# Kafka Producer 설정
+BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'kafka:9092').split(',')
+
+producer = KafkaProducer(
+    bootstrap_servers=BOOTSTRAP_SERVERS,
+    value_serializer=lambda x: json.dumps(x, ensure_ascii=False).encode('utf-8'),
+    api_version=(0, 10, 1)
+)
+
+TOPIC_NAME = 'news-topic'
+
+RSS_SOURCES = {
+    'google': 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko',
+    'mk': 'https://www.mk.co.kr/rss/30000001/',
+    'khan': 'https://www.khan.co.kr/rss/rssdata/economy.xml'
 }
 
-BASE_DIR = "/home/ssafy/heesoo"
-TIMESTAMP = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-CSV_FILE = os.path.join(BASE_DIR, f"khan_news_{TIMESTAMP}.csv")
-CSV_FIELDS = ['category', 'published_at', 'title', 'link', 'summary', 'content']
+seen_links = set()
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-}
+def clean_html(html_text):
+    """HTML 태그를 제거하고 순수 텍스트만 추출합니다."""
+    if not html_text:
+        return ""
+    return BeautifulSoup(html_text, "html.parser").get_text(separator=" ", strip=True)
 
-def create_producer():
+def normalize_news(entry, source_name):
+    """
+    각 언론사별 XML 특성을 반영하여 표준 데이터로 변환합니다.
+    """
+    # 1. 날짜 추출 (가장 중요)
+    # feedparser가 1차적으로 'published'에 매핑하지만, 실패 시 원본 태그 확인
+    raw_date = entry.get('published', '')
+    
+    # 경향신문은 <dc:date>를 사용하므로 feedparser가 'updated'로 매핑할 수 있음
+    if not raw_date and 'updated' in entry:
+        raw_date = entry.updated
+        
     try:
-        producer = KafkaProducer(
-            bootstrap_servers=[KAFKA_BROKER],
-            value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode('utf-8'),
-            api_version=(0, 10, 1)
-        )
-        print("✅ Kafka Producer 연결 성공")
-        return producer
-    except Exception as e:
-        print(f"❌ Kafka 연결 실패: {e}")
-        return None
+        # dateutil이 GMT, +09:00, T 구분자 등을 자동으로 인식해서 datetime 객체로 변환
+        dt = date_parser.parse(raw_date)
+    except:
+        logger.warning(f"날짜 파싱 실패: {raw_date} -> 현재 시간으로 대체")
+        dt = datetime.now()
 
-def scrape_article_content(url):
-    try:
-        time.sleep(random.uniform(1, 3))
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        paragraphs = soup.find_all('p')
-        content = ' '.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 30])
-        if not content:
-            return "본문 수집 실패(구조 다름)"
-        return content
-    except Exception as e:
-        print(f"⚠️ 본문 크롤링 실패 ({url}): {e}")
-        return "본문 수집 실패(에러)"
+    # 2. 본문(Description) 추출 및 정제
+    # 구글뉴스는 description에 <li> 태그가 잔뜩 들어있어서 HTML 제거 필요
+    # 매일경제/경향신문은 CDATA 안에 텍스트가 있음 (feedparser가 자동 추출해줌)
+    raw_summary = entry.get('summary', entry.get('description', ''))
+    clean_summary = clean_html(raw_summary)
 
-def save_to_csv(news_data):
-    file_exists = os.path.isfile(CSV_FILE)
-    with open(CSV_FILE, mode='a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(news_data)
+    # 3. 표준 스키마 반환
+    return {
+        "source": source_name,                          # 데이터 출처 (google, mk, khan)
+        "title": entry.get('title', ''),                # 기사 제목
+        "link": entry.get('link', ''),                  # 기사 원문 링크
+        "summary": clean_summary[:1000],                # 본문 요약 (HTML 제거됨)
+        "original_pub_date": raw_date,                  # 원본 날짜 문자열 (디버깅용)
+        "published_at": dt.isoformat(),                 # 표준화된 날짜 (ISO 8601, Flink용)
+        "collected_at": datetime.now().isoformat()      # 수집 시점
+    }
 
-def fetch_enrich_send(producer):
-    for category, rss_url in RSS_URLS.items():
-        print(f"📡 [{category}] RSS 피드 확인 중: {rss_url}")
-        feed = feedparser.parse(rss_url)
-        if not feed.entries:
-            print(f"📭 [{category}] 새로운 뉴스 없음")
-            continue
+def fetch_and_send():
+    logger.info("뉴스 수집 사이클을 시작합니다...")
+    
+    for source_name, url in RSS_SOURCES.items():
+        try:
+            feed = feedparser.parse(url)
+            logger.info(f"[{source_name}] 뉴스 {len(feed.entries)}개 감지")
 
-        print(f"[{category}] 총 {len(feed.entries)}개의 기사 발견. 크롤링 시작...")
-        for entry in feed.entries:
-            published_time = time.strftime('%Y-%m-%dT%H:%M:%SZ', entry.published_parsed) if entry.get('published_parsed') else None
-            print(f"   Processing: {entry.title[:30]}...")
-            full_content = scrape_article_content(entry.link)
-            news_data = {
-                "category": category,
-                "published_at": published_time,
-                "title": entry.title,
-                "link": entry.link,
-                "summary": getattr(entry, 'summary', ''),
-                "content": full_content
-            }
-            producer.send(KAFKA_TOPIC, value=news_data)
-            save_to_csv(news_data)
-        producer.flush()
-    print("✅ 모든 작업 완료.")
+            count = 0
+            for entry in feed.entries:
+                link = entry.get('link')
+                
+                if link in seen_links:
+                    continue
+                
+                news_data = normalize_news(entry, source_name)
+                
+                # Kafka 전송
+                producer.send(TOPIC_NAME, value=news_data)
+                
+                seen_links.add(link)
+                count += 1
+            
+            logger.info(f" -> [{source_name}] 신규 뉴스 {count}건 전송 완료")
+            
+        except Exception as e:
+            logger.error(f"[{source_name}] 에러 발생: {e}")
+
+    producer.flush()
 
 if __name__ == "__main__":
-    producer = create_producer()
-    if producer:
-        fetch_enrich_send(producer)
-        producer.close()
+    while True:
+        fetch_and_send()
+        time.sleep(60)
