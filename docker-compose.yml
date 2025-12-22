@@ -67,7 +67,8 @@ services:
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
     volumes:
-      - ./data/flink:/opt/flink/usrlib
+      # 코드는 jobs 폴더에 따로 담아서 컨테이너의 /opt/flink/jobs에 연결
+      - ./data/flink/jobs:/opt/flink/jobs
       - ./data/volumes/data-lake:/opt/data-lake
     depends_on:
       - kafka
@@ -83,7 +84,7 @@ services:
         jobmanager.rpc.address: flink-jobmanager
         taskmanager.numberOfTaskSlots: 2
     volumes:
-      - ./data/flink:/opt/flink/usrlib
+      - ./data/flink/jobs:/opt/flink/jobs
       - ./data/volumes/data-lake:/opt/data-lake
     depends_on:
       - flink-jobmanager
