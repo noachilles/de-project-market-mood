@@ -6,6 +6,7 @@ import schedule
 from kafka import KafkaProducer
 from openai import OpenAI
 from dotenv import load_dotenv
+from utils.openai_client import get_openai_client
 from datetime import datetime
 from time import mktime
 
@@ -38,7 +39,7 @@ RSS_SOURCES = [
 ]
 
 # --- 초기화 ---
-client = OpenAI(base_url="https://gms.ssafy.io/gmsapi/api.openai.com/v1")
+client = get_openai_client()
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
     value_serializer=lambda v: json.dumps(v).encode('utf-8')
