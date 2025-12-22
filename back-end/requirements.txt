@@ -13,14 +13,14 @@ django-cors-headers        # 프론트엔드(Vue/React)와 통신 시 CORS 에�
 # -------------------------------------
 # 3. Database (PostgreSQL)
 # -------------------------------------
-psycopg2-binary            # Postgres 연결용 어댑터 (Docker에서 빌드 없이 설치 가능)
+psycopg2-binary>=2.9            # Postgres 연결용 어댑터 (Docker에서 빌드 없이 설치 가능)
 
 # -------------------------------------
 # 4. Infrastructure Clients (Data Pipeline)
 # -------------------------------------
-redis                      # Redis 연결 (캐싱, 세션 관리 등)
+redis>=5.0                      # Redis 연결 (캐싱, 세션 관리 등)
 kafka-python               # Kafka 메시지 수신/발신 (백엔드에서 직접 쏠 경우 대비)
-elasticsearch>=8.0.0       # Elasticsearch 8.x 클라이언트 (검색 엔진 연동)
+elasticsearch>=8.12.0       # Elasticsearch 8.x 클라이언트 (검색 엔진 연동)
 
 # -------------------------------------
 # 5. Production Server (Docker 실행용)
@@ -33,4 +33,7 @@ gunicorn                   # 실무용 WSGI HTTP 서버 (runserver 대신 사용
 requests                   # 외부 API 호출용 (HTTP Client)
 PyJWT                      # JWT 토큰 인증 (로그인 구현 시 필요)
 
-python-dotenv
+python-dotenv>=1.0.0
+
+# OpenAI (GMS 프록시 포함)
+openai>=1.0.0
