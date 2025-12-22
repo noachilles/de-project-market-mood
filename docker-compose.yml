@@ -227,6 +227,23 @@ services:
     depends_on:
       - backend
 
+  stock-consumer:
+    container_name: stock-consumer
+    build:
+      context: ./back-end
+      dockerfile: api/Dockerfile
+    command: python consumers/stock_consumer.py
+    restart: unless-stopped
+    volumes:
+      - ./back-end:/app
+    depends_on:
+      - kafka
+      - postgres
+      - redis
+    env_file:
+      - .env
+
 networks:
   default:
     name: de-project-network
+
