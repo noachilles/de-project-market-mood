@@ -12,6 +12,9 @@ RUN apt-get update -y && \
 # 작업 디렉토리 설정
 WORKDIR /opt/flink
 
+# requirements.txt 복사
+COPY requirements.txt /opt/flink/requirements.txt
+
 # 3. PyFlink 및 라이브러리 설치
 RUN pip3 install apache-flink==1.17.0 psycopg2-binary
 
