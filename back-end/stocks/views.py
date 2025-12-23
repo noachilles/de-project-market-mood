@@ -4,8 +4,52 @@ from datetime import timedelta
 from django.http import JsonResponse
 from django.utils import timezone
 from django.db import connection
+import os
+from django.http import JsonResponse
+from elasticsearch import Elasticsearch
 
 import redis
+
+ES_URL = os.getenv("ES_BASE_URL", "http://elasticsearch:9200")
+STOCKS_INDEX = os.getenv("STOCKS_INDEX", "stocks-kospi")
+
+def search_stocks(request):
+    q = (request.GET.get("q") or "").strip()
+    size = int(request.GET.get("size") or 10)
+
+    if not q:
+        return JsonResponse({"items": []})
+
+    es = Elasticsearch(ES_URL)
+
+    body = {
+        "size": size,
+        "_source": ["code", "name", "std_code", "group_code"],
+        "query": {
+            "bool": {
+                "should": [
+                    {"prefix": {"code": q}},
+                    {"match": {"name": {"query": q}}},
+                    {"match_phrase_prefix": {"name": {"query": q}}},
+                ],
+                "minimum_should_match": 1
+            }
+        }
+        # ✅ sort 제거: name.keyword 없어서 400 나는 케이스 방지
+    }
+
+    try:
+        resp = es.search(index=STOCKS_INDEX, body=body, request_timeout=3)
+        hits = resp.get("hits", {}).get("hits", [])
+        items = [{
+            "code": h["_source"]["code"],
+            "name": h["_source"]["name"],
+        } for h in hits]
+        return JsonResponse({"items": items})
+    except Exception as e:
+        # 디버깅용: ES 에러를 그대로 응답에 실어줌(개발 단계용)
+        return JsonResponse({"items": [], "error": str(e)}, status=500)
+
 
 
 def _get_redis_client():
@@ -25,7 +69,7 @@ def current_price(request, code: str):
     if not val:
         return JsonResponse(
             {"code": code, "data": None, "message": "No cached price in Redis"},
-            status=404
+            status=200
         )
 
     try:

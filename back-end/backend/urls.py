@@ -18,10 +18,16 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from stocks.views import current_price, chart
+from django.urls import path, include
+from stocks.views import search_stocks
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/current-price/<str:code>", current_price, name="current_price"),
+    path("api/current-price/<str:code>/", current_price, name="current_price_slash"),
     path("api/chart/<str:code>", chart, name="chart"),
+    path("api/news/", include("news.urls")),
+    path("api/stocks/search", search_stocks, name="search_stocks"),
+    
 ]

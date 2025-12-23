@@ -24,6 +24,9 @@
 
     <div class="divider"></div>
 
+    <div v-if="loading" class="status-line">차트 로딩 중…</div>
+    <div v-else-if="errorMsg" class="status-line error">{{ errorMsg }}</div>
+
     <div class="chart-wrapper">
       <canvas ref="chartCanvas"></canvas>
     </div>
@@ -47,6 +50,25 @@ import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 
 Chart.register(...registerables);
+
+/**
+ * ✅ 백엔드 차트 API
+ * GET /api/chart/{code}?range=1d
+ * 응답 예:
+ * {
+ *   code, range,
+ *   labels: [ISO...],
+ *   price: [..],
+ *   volume: [..],
+ *   sentiment: [],
+ *   flow: []
+ * }
+ */
+async function fetchChart(code, range) {
+  const res = await fetch(`http://localhost:8000/api/chart/${code}?range=${range}`);
+  if (!res.ok) throw new Error(`Chart API failed: ${res.status}`);
+  return await res.json();
+}
 
 const props = defineProps({
   ticker: { type: String, required: true },
@@ -81,62 +103,68 @@ const labelRange = computed(() => {
   return map[range.value] ?? "1년";
 });
 
-const RANGE_SPEC = {
-  rt: { stepMs: 1_000, points: 60, unit: "second" },
-  "1d": { stepMs: 60 * 60 * 1_000, points: 24, unit: "hour" },
-  "1w": { stepMs: 24 * 60 * 60 * 1_000, points: 7, unit: "day" },
-  "1m": { stepMs: 3 * 24 * 60 * 60 * 1_000, points: 10, unit: "day" },
-  "3m": { stepMs: 7 * 24 * 60 * 60 * 1_000, points: 13, unit: "week" },
-  "6m": { stepMs: 14 * 24 * 60 * 60 * 1_000, points: 13, unit: "week" },
-  "1y": { stepMs: 30 * 24 * 60 * 60 * 1_000, points: 12, unit: "month" },
+const RANGE_UNIT = {
+  rt: "second",
+  "1d": "hour",
+  "1w": "day",
+  "1m": "day",
+  "3m": "week",
+  "6m": "week",
+  "1y": "month",
 };
 
-const baseByTicker = {
-  "005930": { price: 85000, sentiment: 62, flow: 30 },
-  "000660": { price: 150000, sentiment: 48, flow: -10 },
-};
+const unit = computed(() => RANGE_UNIT[range.value] ?? "week");
 
-function genSeries({ basePrice, baseSent, baseFlow, points, stepMs }) {
-  const now = Date.now();
-  const out = [];
-
-  let p = basePrice;
-  let s = baseSent;
-  let f = baseFlow;
-
-  for (let i = points - 1; i >= 0; i--) {
-    const t = now - i * stepMs;
-
-    p = Math.max(1, p + (Math.random() - 0.5) * basePrice * 0.002);
-    s = Math.min(100, Math.max(0, s + (Math.random() - 0.5) * 6));
-    f = f + (Math.random() - 0.5) * 40;
-
-    out.push({
-      x: t,
-      price: Math.round(p),
-      sentiment: Math.round(s),
-      flow: Math.round(f),
-      news: `뉴스 요약(${new Date(t).toLocaleString()}): 더미 데이터`,
-    });
-  }
-  return out;
-}
-
-const series = computed(() => {
-  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
-  const base = baseByTicker[ticker.value] ?? baseByTicker["005930"];
-  return genSeries({
-    basePrice: base.price,
-    baseSent: base.sentiment,
-    baseFlow: base.flow,
-    points: spec.points,
-    stepMs: spec.stepMs,
-  });
-});
+/** ✅ API 데이터를 여기로 적재 */
+const series = ref([]); // [{x, price, sentiment, flow, volume, news}]
+const loading = ref(false);
+const errorMsg = ref("");
 
 /* ✅ 한 프레임 뒤에 실행(레이아웃 0 높이 방지) */
 function raf() {
   return new Promise((resolve) => requestAnimationFrame(resolve));
+}
+
+async function loadChartData() {
+  loading.value = true;
+  errorMsg.value = "";
+  try {
+    const res = await fetchChart(ticker.value, range.value);
+
+    const labels = res.labels || [];
+    const prices = res.price || [];
+    const vols = res.volume || [];
+    const sents = res.sentiment || [];
+    const flows = res.flow || [];
+
+    series.value = labels.map((label, i) => {
+      const x = new Date(label).getTime();
+      const price = Number(prices[i] ?? 0);
+      const volume = Number(vols[i] ?? 0);
+
+      const sentiment =
+        sents[i] != null && sents[i] !== "" ? Number(sents[i]) : null;
+
+      const flow =
+        flows[i] != null && flows[i] !== "" ? Number(flows[i]) : null;
+
+      return {
+        x,
+        price,
+        volume,
+        sentiment,
+        flow,
+        // 현재 API에는 뉴스 요약이 없어서 placeholder (나중에 labels 기준으로 조인하면 됨)
+        news: `(${label}) 뉴스 요약: (연동 예정)`,
+      };
+    });
+  } catch (e) {
+    console.error("[StockChart] loadChartData failed:", e);
+    errorMsg.value = "차트 데이터를 불러오지 못했습니다.";
+    series.value = [];
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function buildChartSafe() {
@@ -152,8 +180,22 @@ async function buildChartSafe() {
   }
 
   const ctx = chartCanvas.value.getContext("2d");
-  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
   const d = series.value;
+
+  // 데이터가 없으면 차트만 비워두고 종료
+  if (!d || d.length === 0) {
+    try {
+      chartInstance?.destroy();
+      chartInstance = null;
+    } catch (_) {}
+    return;
+  }
+
+  // ✅ Flow가 없으면 volume으로 대체(임시)
+  const flowOrVolume = d.map((r) => ({
+    x: r.x,
+    y: Number(r.flow ?? r.volume ?? 0),
+  }));
 
   try {
     chartInstance?.destroy();
@@ -175,7 +217,10 @@ async function buildChartSafe() {
           {
             type: "line",
             label: "Sentiment",
-            data: d.map((r) => ({ x: r.x, y: r.sentiment })),
+            // ✅ sentiment 값 있는 것만 그리기(없으면 라인도 안 보임)
+            data: d
+              .filter((r) => r.sentiment != null)
+              .map((r) => ({ x: r.x, y: r.sentiment })),
             yAxisID: "ySentiment",
             borderColor: "#fb923c",
             borderDash: [4, 3],
@@ -186,7 +231,7 @@ async function buildChartSafe() {
           {
             type: "bar",
             label: "Flow",
-            data: d.map((r) => ({ x: r.x, y: r.flow })),
+            data: flowOrVolume,
             yAxisID: "yFlow",
             backgroundColor: (ctx) => {
               const v = ctx.raw?.y ?? 0;
@@ -218,7 +263,7 @@ async function buildChartSafe() {
         scales: {
           x: {
             type: "time",
-            time: { unit: spec.unit },
+            time: { unit: unit.value },
             ticks: { color: "#9ca3af", font: { size: 11 }, maxTicksLimit: 8 },
             grid: { display: false },
           },
@@ -245,15 +290,28 @@ async function buildChartSafe() {
   }
 }
 
-watch([ticker, range], () => {
-  buildChartSafe();
+/** ✅ ticker / range 바뀌면: API 재조회 → 차트 rebuild */
+watch([ticker, range], async () => {
+  await loadChartData();
+  await buildChartSafe();
 });
 
-onMounted(() => {
-  buildChartSafe();
+/** ✅ 마운트 시 최초 로딩 + (선택) 5초 폴링 */
+let timer = null;
+
+onMounted(async () => {
+  await loadChartData();
+  await buildChartSafe();
+
+  // 실시간 느낌 폴링 (필요 없으면 주석)
+  timer = setInterval(async () => {
+    await loadChartData();
+    await buildChartSafe();
+  }, 5000);
 });
 
 onBeforeUnmount(() => {
+  clearInterval(timer);
   chartInstance?.destroy();
 });
 
@@ -266,5 +324,13 @@ function changeRange(v) {
 /* ✅ 차트가 사라지는 1순위 원인: wrapper 높이 0 방지 */
 .chart-wrapper {
   min-height: 320px;
+}
+.status-line {
+  padding: 8px 12px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+.status-line.error {
+  color: #fecaca;
 }
 </style>
