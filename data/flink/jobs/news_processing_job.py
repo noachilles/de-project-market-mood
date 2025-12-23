@@ -1,4 +1,4 @@
-from pyflink.datastream import StreamExecutionEnvironment, CheckpointingMode
+from pyflink.datastream import StreamExecutionEnvironment, CheckpointingMode, RuntimeExecutionMode
 from pyflink.table import StreamTableEnvironment, EnvironmentSettings, DataTypes
 from pyflink.table.udf import udf
 import pandas as pd
@@ -50,6 +50,7 @@ def main():
     # 환경 설정
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(1)
+    env.set_runtime_mode(RuntimeExecutionMode.STREAMING)
     env.enable_checkpointing(60 * 1000, CheckpointingMode.EXACTLY_ONCE)
     
     settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
@@ -70,7 +71,7 @@ def main():
             'topic' = 'news-topic',
             'properties.bootstrap.servers' = 'kafka:9092',
             'properties.group.id' = 'flink-news-es-group',
-            'scan.startup.mode' = 'latest-offset',
+            'scan.startup.mode' = 'earliest-offset',
             'format' = 'json'
         )
     """)

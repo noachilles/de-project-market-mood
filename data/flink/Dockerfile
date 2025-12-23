@@ -16,6 +16,7 @@ WORKDIR /opt/flink
 RUN pip3 install apache-flink==1.17.0 psycopg2-binary
 
 # 4. 커넥터 JAR 파일 다운로드
+RUN wget -P /opt/flink/lib/ https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-elasticsearch7/3.0.1-1.17/flink-sql-connector-elasticsearch7-3.0.1-1.17.jar
 # (1) Kafka 연결용
 RUN wget -P /opt/flink/lib/ https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/1.17.0/flink-sql-connector-kafka-1.17.0.jar
 

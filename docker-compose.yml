@@ -39,6 +39,12 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
+    healthcheck:
+      test: nc -z localhost 9092 || exit 1  # 9092 포트가 열렸는지 확인
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # [3] Kafka UI: 토픽의 데이터 흐름과 상태를 웹에서 확인하는 도구
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -66,6 +72,7 @@ services:
       - |
         FLINK_PROPERTIES=
         jobmanager.rpc.address: flink-jobmanager
+        rest.bind-address: 0.0.0.0
     volumes:
       # 코드는 jobs 폴더에 따로 담아서 컨테이너의 /opt/flink/jobs에 연결
       - ./data/flink/jobs:/opt/flink/jobs
@@ -89,9 +96,29 @@ services:
     depends_on:
       - flink-jobmanager
 
+  flink-job-submitter:
+    build: ./data/flink  # JobManager와 같은 이미지(환경) 사용
+    container_name: flink-job-submitter
+    depends_on:
+      - flink-jobmanager
+      - kafka
+    volumes:
+      - ./data/flink/jobs:/opt/flink/jobs
+    # [자동화 로직]
+    # 1. JobManager가 완전히 켜질 때까지 10초 정도 기다림 (안전장치)
+    # 2. flink run 명령어로 Job 제출 (-d: Detached 모드로 백그라운드 실행)
+    command: >
+      bash -c "
+      echo 'Waiting for Flink JobManager...' &&
+      sleep 20 &&
+      echo 'Submitting Flink Job...' &&
+      /opt/flink/bin/flink run -m flink-jobmanager:8081 -py /opt/flink/jobs/news_processing_job.py -d
+      "
+
   # [6] Spark Master: 대용량 배치 분석 작업을 관리하는 마스터 노드
   spark-master:
-    image: apache/spark:3.5.1
+    build: 
+      context: ./data/spark 
     container_name: spark-master
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     ports:
@@ -105,7 +132,8 @@ services:
 
   # [7] Spark Worker: 마스터의 지시대로 과거 데이터를 분석하는 워커 노드
   spark-worker:
-    image: apache/spark:3.5.1
+    build: 
+      context: ./data/spark 
     container_name: spark-worker
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
@@ -178,9 +206,10 @@ services:
       context: ./data/producers  # 여기에 Dockerfile과 requirements.txt가 있어야 함
     image: my-news-producer:1.0
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     restart: always
 
   # [13] Websocket Server: 실시간 데이터를 브라우저로 즉시 밀어주는 중계 서버
