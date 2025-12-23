@@ -26,7 +26,7 @@ TOPIC_NAME = 'news-topic'
 RSS_SOURCES = {
     'google': 'https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=ko&gl=KR&ceid=KR:ko',
     'mk': 'https://www.mk.co.kr/rss/30000001/',
-    'khan': 'https://www.khan.co.kr/rss/rssdata/economy.xml'
+    'khan': 'https://weekly.khan.co.kr/rss/rssdata/world_news.xml'
 }
 
 seen_links = set()

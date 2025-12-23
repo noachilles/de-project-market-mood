@@ -3,17 +3,23 @@ import os
 
 # [수정] 확인하고 싶은 파일의 "전체 경로"를 복사해서 아래에 넣으세요.
 # 예: ./data/volumes/data-lake/news/dt=2025-12-22/hr=14/part-어쩌구저쩌구...
-TARGET_FILE = "/home/ssafy/de-project/data/volumes/data-lake/news/dt=2025-12-22/hr=05/part-62170f0d-2e7b-458d-adc6-1fd77a51801a-0-12"
+# 현재 파일(스크립트)의 절대 경로
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 부모(de-project) -> data -> volumes ... 로 이동
+target_path = os.path.join(current_dir, '..', 'data', 'volumes', 'data-lake', 'news')
+
+BASE_PATH = os.path.normpath(target_path)
 
 # 파일 경로 자동 찾기 (위 경로를 모르겠으면 사용)
-base_path = "../data/volumes/data-lake/news/"
-if not os.path.exists(TARGET_FILE):
-    print("⚠️ 지정한 파일이 없어서, 자동으로 가장 최신 파일을 찾습니다...")
-    for root, dirs, files in os.walk(base_path):
-        for file in files:
-            if file.startswith("part-"):
-                TARGET_FILE = os.path.join(root, file)
-                break
+# base_path = "data/volumes/data-lake"
+# if not os.path.exists(TARGET_FILE):
+print("⚠️ 지정한 파일이 없어서, 자동으로 가장 최신 파일을 찾습니다...")
+for root, dirs, files in os.walk(BASE_PATH):
+    for file in files:
+        if file.startswith("part-"):
+            TARGET_FILE = os.path.join(root, file)
+            break
 
 print(f"📂 읽으려는 파일: {TARGET_FILE}")
 
