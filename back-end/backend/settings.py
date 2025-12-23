@@ -27,11 +27,13 @@ SECRET_KEY = 'django-insecure-+txhz@f#gmrdsqei&=36@4t%2h7wz1)%_nmo057ad7j!km%2m^
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
+# 웹소켓 연결
+ASGI_APPLICATION = 'backend.asgi.application'
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -130,3 +132,14 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# 웹소켓 연결
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            # docker-compose 서비스명이 'redis'이므로 호스트를 'redis'로 지정
+            "hosts": [("redis", 6379)],
+        },
+    },
+}
