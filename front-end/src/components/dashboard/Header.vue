@@ -11,7 +11,7 @@
         <div class="price-main">{{ formatKRW(stock.price) }}</div>
 
         <div class="change-pill" :class="toneClass(stock.change)">
-          <span>{{ stock.change >= 0 ? "▲" : "▼" }}</span>
+          <span>{{ Number(stock.change || 0) >= 0 ? "▲" : "▼" }}</span>
           <span>{{ formatChange(stock.change) }}</span>
         </div>
 
@@ -38,6 +38,15 @@
         <div class="symbol">종목 로딩 중…</div>
       </div>
     </div>
+
+    <div class="header-right">
+      <div class="pill-tag">
+        <span>AI 기반 종목 인사이트</span>
+      </div>
+      <button class="primary-btn" disabled>
+        <span class="icon">✨</span> AI Insights 보기
+      </button>
+    </div>
   </header>
 </template>
 
@@ -45,10 +54,11 @@
 const props = defineProps({
   stock: {
     type: Object,
-    default: null, // ✅ required 제거 + 안전 처리
+    default: null,
   },
 });
 
+/* ---------- 포맷 함수 ---------- */
 function formatKRW(n) {
   return Number(n || 0).toLocaleString("ko-KR") + "원";
 }
@@ -62,6 +72,14 @@ function toneClass(v) {
 </script>
 
 <style scoped>
+/* 기존 프로젝트 스타일이 대부분 이미 있을 거라 가정하고,
+   여기에는 최소한의 톤만 유지 */
 .change-pill.pos { color: #4ade80; }
 .change-pill.neg { color: #fecaca; }
+
+/* disabled 버튼이 어색하면 아래만 유지 */
+.primary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 </style>
