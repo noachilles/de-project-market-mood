@@ -27,3 +27,12 @@ class StockPrice(models.Model):
         indexes = [
             models.Index(fields=["stock", "time"], name="idx_stockprice_stock_time"),
         ]
+
+class StockDailyReport(models.Model):
+    stock = models.ForeignKey(Stock, on_delete=models.CASCADE)
+    target_date = models.DateField()
+    ai_summary = models.TextField()  # 여기에 "전체 기사 종합 두 줄 요약" 저장
+    sentiment_avg = models.FloatField() # 전체 기사 평균 감성 점수
+    
+    class Meta:
+        unique_together = ('stock', 'target_date')

@@ -127,6 +127,8 @@ services:
     volumes:
       - ./data/spark:/app
       - ./data/volumes/data-lake:/opt/data-lake
+    env_file:
+      - .env
     environment:
       - SPARK_NO_DAEMONIZE=true
 
@@ -145,6 +147,8 @@ services:
       - ./data/volumes/data-lake:/opt/data-lake
     depends_on:
       - spark-master
+    env_file:
+      - .env
 
   # =========================================
   # 3. Databases (데이터 저장소)
@@ -303,7 +307,7 @@ services:
     build:
       context: ./data/producers
       dockerfile: Dockerfile
-    command: python kis_producer.py
+    command: python kis_producer.py real
     depends_on:
       kafka:
         condition: service_healthy
@@ -314,7 +318,9 @@ services:
       - KIS_APP_SECRET=${KIS_APP_SECRET}
     env_file:
       - .env
-    restart: always
+    restart: "no"
+    profiles:
+      - manual
 
   stock-bridge:
     container_name: stock-bridge

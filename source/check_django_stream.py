@@ -1,3 +1,5 @@
+# 웹소켓으로 받은 실시간 데이터가 연결된 결과를 확인할 수 있음
+
 import asyncio
 import websockets
 import json
