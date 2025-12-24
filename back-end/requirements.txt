@@ -40,3 +40,6 @@ openai>=1.0.0
 daphne
 channels
 channels_redis
+django-cors-headers
+
+daphne==4.2.1
