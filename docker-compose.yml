@@ -127,8 +127,6 @@ services:
     volumes:
       - ./data/spark:/app
       - ./data/volumes/data-lake:/opt/data-lake
-    env_file:
-      - .env
     environment:
       - SPARK_NO_DAEMONIZE=true
 
@@ -147,8 +145,6 @@ services:
       - ./data/volumes/data-lake:/opt/data-lake
     depends_on:
       - spark-master
-    env_file:
-      - .env
 
   # =========================================
   # 3. Databases (데이터 저장소)
@@ -242,7 +238,6 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - ./back-end:/app
-      - ./data:/data
     depends_on:
       - kafka
       - postgres
@@ -262,52 +257,29 @@ services:
       - backend
 
   stock-consumer:
-    # ✅ backend랑 같은 이미지/빌드 컨텍스트를 재사용 (둘 중 프로젝트에 맞는 걸로 택1)
-    # 1) backend가 build로 되어 있으면 build 재사용:
+    container_name: stock-consumer
     build:
       context: ./back-end
-    # 2) backend가 image로 되어 있으면 image 재사용:
-    # image: <backend-image-name>
       dockerfile: api/Dockerfile
-    container_name: stock-consumer
-    working_dir: /app
-    command: ["python", "consumers/stock_consumer.py"]
-    depends_on:
-      - kafka
-      - redis
-      - backend
-    environment:
-      # 🔻 consumer 코드가 어떤 env를 쓰는지 몰라도, 보통 아래로 맞춰두면 편함
-      KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
-      REDIS_HOST: "redis"
-      REDIS_PORT: "6379"
-      # 필요하면 topic/group도 여기서 지정
-      # KAFKA_TOPIC: "stock-price"
-      # KAFKA_GROUP_ID: "stock-consumer"
+    command: python consumers/stock_consumer.py
+    restart: unless-stopped
     volumes:
       - ./back-end:/app
-    restart: unless-stopped
-  
-  frontend-dev:
-    image: node:20-bookworm-slim
-    container_name: frontend-dev
-    working_dir: /app
-    volumes:
-      - ./front-end:/app
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_BASE=http://localhost:8000
-    command: sh -lc "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
     depends_on:
-      - backend
+      - kafka
+      - postgres
+      - redis
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
 
   stock-producer:
     container_name: stock-producer
     build:
       context: ./data/producers
       dockerfile: Dockerfile
-    command: python kis_producer.py real
+    command: python kis_producer.py
     depends_on:
       kafka:
         condition: service_healthy
@@ -318,9 +290,7 @@ services:
       - KIS_APP_SECRET=${KIS_APP_SECRET}
     env_file:
       - .env
-    restart: "no"
-    profiles:
-      - manual
+    restart: always
 
   stock-bridge:
     container_name: stock-bridge
