@@ -23,7 +23,7 @@ def fetch_content(url):
 
 def main():
     # Airflow에서 전달하는 기준 날짜 (예: 20251223)
-    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y%m%d")
+    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
     
     spark = SparkSession.builder \
         .appName(f"NewsCrawler_{target_date}") \

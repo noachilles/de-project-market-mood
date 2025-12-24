@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/current-price/<str:code>", current_price, name="current_price"),
     path("api/current-price/<str:code>/", current_price, name="current_price_slash"),
     path("api/chart/<str:code>", chart, name="chart"),
+    path("api/chart/<str:code>/", chart, name="chart_slash"), # 이 줄을 추가하세요!
     path("api/news/", include("news.urls")),
     path("api/stocks/search", search_stocks, name="search_stocks"),
     
