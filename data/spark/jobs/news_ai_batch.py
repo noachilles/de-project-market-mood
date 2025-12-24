@@ -1,13 +1,10 @@
-import sys
+# /app/jobs/news_ai_batch.py
 import os
 import json
 import time
-import requests
-import psycopg2
 from typing import Iterator, List, Dict, Any, Tuple
-from dotenv import load_dotenv
-from datetime import datetime, timedelta
 
+import requests
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.functions import col, from_utc_timestamp, to_timestamp
 
@@ -27,7 +24,7 @@ SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "gpt-4o-mini")
 BATCH_SIZE = int(os.getenv("AI_BATCH_SIZE", "16"))
 MAX_RETRIES = int(os.getenv("AI_MAX_RETRIES", "5"))
 
-# --- 유틸리티 함수 ---
+
 def _headers() -> Dict[str, str]:
     # Worker 내부 유실 방지를 위해 os.environ에서 직접 조회
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -40,12 +37,13 @@ def _headers() -> Dict[str, str]:
         "Content-Type": "application/json",
     }
 
+
 def _retry_post(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     last_err = None
     for i in range(MAX_RETRIES):
         try:
             r = requests.post(url, headers=_headers(), json=payload, timeout=60)
-            if 200 <= r.status_code < 300:
+            if r.status_code >= 200 and r.status_code < 300:
                 return r.json()
             time.sleep(min(2 ** i, 10))
         except Exception as e:

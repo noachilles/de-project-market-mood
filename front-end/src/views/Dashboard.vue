@@ -1,6 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed } from "vue";
 
 import Header from "@/components/dashboard/Header.vue";
 import WatchList from "@/components/dashboard/WatchList.vue";
@@ -16,10 +15,8 @@ const livePriceData = ref([]); // ✅ 차트에 보낼 실시간 데이터 배�
 const route = useRoute();
 const API_BASE = "http://localhost:8000";
 
-const watchItems = ref([
-  { ticker: "005930", name: "삼성전자", price: 0, change: 0, volume: 0 },
-  { ticker: "000660", name: "SK하이닉스", price: 0, change: 0, volume: 0 },
-]);
+/* ================= 2. 선택 상태 (🔥 핵심) ================= */
+const selectedTicker = ref(watchItems[0].ticker);
 
 const selectedTicker = ref(watchItems.value[0].ticker);
 const aiNewsList = ref([]); 
@@ -194,16 +191,8 @@ onBeforeUnmount(() => clearInterval(timer));
       </section>
 
       <section class="column right">
-        <AiInsight 
-          :ticker="selectedTicker" 
-          :news="aiNewsList" 
-        />
-        
-        <NewsFeed 
-          :ticker="selectedTicker" 
-          :news="aiNewsList" 
-          :loading="isNewsLoading" 
-        />
+        <AiInsight :ticker="selectedTicker" />
+        <MyHolding :holding="selectedHolding" />
       </section>
     </main>
   </div>

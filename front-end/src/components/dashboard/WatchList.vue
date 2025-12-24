@@ -1,5 +1,4 @@
 <script setup>
-  import { computed } from "vue";
 import YesterdayReportCard from "./YesterdayReportCard.vue";
 
 const props = defineProps({
@@ -9,22 +8,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["select", "open-report"]);
-
-const sortedItems = computed(() => {
-  const arr = [...(props.items || [])];
-
-  // 1) 변화율 내림차순 정렬
-  arr.sort((a, b) => Number(b.change || 0) - Number(a.change || 0));
-
-  // 2) (선택) 선택 종목은 맨 위로
-  const idx = arr.findIndex((x) => x.ticker === props.selectedTicker);
-  if (idx > 0) {
-    const [picked] = arr.splice(idx, 1);
-    arr.unshift(picked);
-  }
-
-  return arr;
-});
 
 function formatKRW(n) {
   return Number(n || 0).toLocaleString("ko-KR") + "원";
@@ -49,7 +32,7 @@ function toneClass(v) {
 
     <div class="watchlist">
       <div
-        v-for="it in sortedItems"
+        v-for="it in items"
         :key="it.ticker"
         class="watch-item"
         :class="{ active: it.ticker === selectedTicker }"
@@ -58,10 +41,10 @@ function toneClass(v) {
       >
         <div>
           <div class="watch-symbol">{{ it.name }}</div>
-          <div class="watch-price">{{ it.price != null ? formatKRW(it.price) : "로딩…" }}</div>
+          <div class="watch-price">{{ formatKRW(it.price) }}</div>
         </div>
         <div class="watch-change" :class="toneClass(it.change)">
-          {{ it.change != null ? formatChange(it.change) : "-" }}
+          {{ formatChange(it.change) }}
         </div>
       </div>
     </div>
