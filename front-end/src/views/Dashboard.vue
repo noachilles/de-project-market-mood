@@ -6,70 +6,174 @@ import WatchList from "@/components/dashboard/WatchList.vue";
 import StockChart from "@/components/dashboard/StockChart.vue";
 import NewsFeed from "@/components/dashboard/NewsFeed.vue";
 import AiInsight from "@/components/dashboard/AiInsight.vue";
-import MyHolding from "@/components/dashboard/MyHolding.vue";
+import { fetchCurrentPrice } from "@/services/stocks";
 
-/* ================= 1. 관심종목 마스터 ================= */
-const watchItems = [
-  { ticker: "005930", name: "삼성전자", price: 85300, change: 2.55, volume: 1250000 },
-  { ticker: "000660", name: "SK하이닉스", price: 135000, change: -1.15, volume: 980000 },
-];
+/* =========================
+   0) 상태 및 API 설정
+========================= */
+const livePriceData = ref([]); // ✅ 차트에 보낼 실시간 데이터 배열
+const route = useRoute();
+const API_BASE = "http://localhost:8000";
 
 /* ================= 2. 선택 상태 (🔥 핵심) ================= */
 const selectedTicker = ref(watchItems[0].ticker);
 
-/* ✅ Header에서 바로 쓸 “선택된 종목 객체” */
+const selectedTicker = ref(watchItems.value[0].ticker);
+const aiNewsList = ref([]); 
+const dailyReport = ref(null);
+const isNewsLoading = ref(false);
+
+// 폴링 및 에러 상태
+const polling = ref(false);
+const lastUpdatedAt = ref(null);
+const lastError = ref(null);
+let timer = null;
+
+/* ✅ Header에 전달할 현재 선택된 종목 정보 */
 const selectedStock = computed(() => {
-  return watchItems.find((w) => w.ticker === selectedTicker.value) ?? null;
+  return watchItems.value.find((w) => w.ticker === selectedTicker.value) ?? null;
 });
 
-/* ================= 3. 보유 종목 ================= */
-const holdingsByTicker = {
-  "005930": { symbol: "삼성전자", avgPrice: 72000, quantity: 100, currentPrice: 85300 },
-  "000660": { symbol: "SK하이닉스", avgPrice: 142000, quantity: 20, currentPrice: 135000 },
-};
+/* =========================
+   1) 데이터 Fetch 로직 (AI & News)
+========================= */
+async function fetchStockData(ticker) {
+  isNewsLoading.value = true;
+  lastError.value = null;
 
-const selectedHolding = computed(() => holdingsByTicker[selectedTicker.value] ?? null);
+  // 뉴스 로드 (Elasticsearch 기반)
+  const loadNews = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/news/?ticker=${ticker}&size=5`);
+      if (!res.ok) throw new Error("News API 에러");
+      const data = await res.json();
+      aiNewsList.value = data.items || [];
+    } catch (e) {
+      console.warn("⚠️ 뉴스 로드 실패:", e);
+      aiNewsList.value = [];
+    }
+  };
 
-/* ================= 4. 전날 리포트 ================= */
-const reportsByTicker = {
-  "005930": {
-    date: "2025-12-12 (금)",
-    tag: "선행 지표 검증",
-    summary: "기관·외국인 순매수 확대와 긍정 뉴스 비중 증가로 단기 상승 시그널이 우세했습니다.",
-    bullets: ["긍정 뉴스 비중 42% → 57%", "외국인 +820억 / 기관 +310억", "감정 점수 선행 패턴 확인"],
-    stats: [
-      { label: "감정 점수", value: "71 (+6)", tone: "pos" },
-      { label: "수급 합계", value: "+1,130억", tone: "pos" },
-    ],
-    todayFocus: "HBM 공급 계약 관련 헤드라인",
-  },
-  "000660": {
-    date: "2025-12-12 (금)",
-    tag: "리스크 점검",
-    summary: "단기 수급 약화로 보수적 접근이 필요했습니다.",
-    bullets: ["기관 매도 우위", "변동성 확대", "단기 추세 이탈 주의"],
-    stats: [
-      { label: "감정 점수", value: "48 (-5)", tone: "neg" },
-      { label: "수급 합계", value: "-320억", tone: "neg" },
-    ],
-    todayFocus: "메모리 업황 가이던스",
-  },
-};
+  // 차트 및 AI 리포트 로드 (Postgres 기반)
+  const loadChartAndReport = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/chart/${ticker}/?range=1w`);
+      if (!res.ok) throw new Error("Chart/Report API 에러");
+      const data = await res.json();
+      
+      // 최신 AI 리포트 추출
+      const reportDates = Object.keys(data.ai_reports || {}).sort().reverse();
+      if (reportDates.length > 0) {
+        const latestDate = reportDates[0];
+        dailyReport.value = { ...data.ai_reports[latestDate], date: latestDate };
+      } else {
+        dailyReport.value = null;
+      }
+    } catch (e) {
+      console.error("❌ 분석 리포트 로드 실패:", e);
+    }
+  };
 
-const selectedReport = computed(() => reportsByTicker[selectedTicker.value] ?? null);
+  await Promise.allSettled([loadNews(), loadChartAndReport()]);
+  isNewsLoading.value = false;
+}
 
-/* ================= 5. 이벤트 ================= */
+/* =========================
+   2) 현재가 실시간 갱신 (Redis 기반)
+========================= */
+// Dashboard.vue 의 refreshAllPrices 함수 내부
+async function refreshAllPrices() {
+  polling.value = true;
+  try {
+    const results = await Promise.allSettled(
+      watchItems.value.map(it => fetchCurrentPrice(it.ticker))
+    );
+
+    results.forEach((res, idx) => {
+      if (res.status === "fulfilled" && res.value && res.value.price) {
+        const item = watchItems.value[idx];
+        const data = res.value; // 백엔드 응답 데이터
+
+        item.price = Number(data.price);
+        item.change = Number(data.change_rate || 0);
+        
+        // ✅ [핵심] 백엔드의 "volume": 22 데이터를 Header가 인식하는 "vol"에 할당
+        item.vol = Number(data.volume || 0); 
+
+        if (item.ticker === selectedTicker.value) {
+          const now = new Date();
+          const nextPoint = { x: now, y: item.price };
+          // 무한 루프 방지용 새 배열 할당
+          livePriceData.value = [...livePriceData.value, nextPoint].slice(-1200);
+        }
+      }
+    });
+    lastUpdatedAt.value = new Date().toLocaleTimeString();
+  } catch (e) {
+    console.error("❌ 데이터 수집 에러:", e);
+  } finally {
+    polling.value = false;
+  }
+}
+
+// 종목 변경 시 실시간 데이터 초기화
+watch(selectedTicker, () => {
+  livePriceData.value = [];
+  fetchStockData(selectedTicker.value);
+}, { immediate: true });
+
+/* =========================
+   3) 이벤트 핸들러 및 감시
+========================= */
+// Header나 WatchList에서 종목 선택 시 실행
 function onSelectTicker(ticker) {
   selectedTicker.value = ticker;
 }
+
+// 종목 변경 감시 -> 데이터 로드
+watch(selectedTicker, (newTicker) => {
+  if (newTicker) fetchStockData(newTicker);
+}, { immediate: true });
+
+// URL 쿼리 파라미터 감시
+watch(() => route.query.code, (code) => {
+  if (code) selectedTicker.value = code;
+}, { immediate: true });
+
+/* ✅ WatchList에 전달할 리포트 데이터 변환 */
+const selectedReport = computed(() => {
+  if (!dailyReport.value) return null;
+  return {
+    date: dailyReport.value.date,
+    tag: "AI 종합 브리핑",
+    summary: dailyReport.value.summary,
+    bullets: aiNewsList.value.slice(0, 3).map(n => n.title),
+    stats: [
+      { label: "AI 감정 지수", value: dailyReport.value.sentiment.toFixed(2), tone: dailyReport.value.sentiment >= 0 ? "pos" : "neg" }
+    ],
+    todayFocus: "뉴스 모멘텀 분석 중"
+  };
+});
+
+onMounted(() => {
+  refreshAllPrices();
+  timer = setInterval(refreshAllPrices, 3000); // 3초마다 Redis 확인
+});
+
+onBeforeUnmount(() => clearInterval(timer));
 </script>
+
 <template>
   <div class="dashboard-shell">
-    <!-- 🔹 종목 헤더 -->
-    <Header :stock="selectedStock" />
+    <Header :stock="selectedStock" @select="onSelectTicker" />
+
+    <div class="status-bar">
+      <span v-if="polling" class="loading-text">🔄 현재가 갱신 중…</span>
+      <span v-else class="time-text">⏱ 마지막 갱신: {{ lastUpdatedAt ?? "없음" }}</span>
+      <span v-if="lastError" class="error-text">⚠️ {{ lastError }}</span>
+    </div>
 
     <main class="layout">
-      <!-- 왼쪽 -->
       <section class="column left">
         <WatchList
           :items="watchItems"
@@ -79,13 +183,13 @@ function onSelectTicker(ticker) {
         />
       </section>
 
-      <!-- 중앙 -->
       <section class="column center">
-        <StockChart :ticker="selectedTicker" />
-        <NewsFeed :ticker="selectedTicker" />
+        <StockChart 
+          :ticker="selectedTicker" 
+          :live-data="livePriceData" 
+        />
       </section>
 
-      <!-- 오른쪽 -->
       <section class="column right">
         <AiInsight :ticker="selectedTicker" />
         <MyHolding :holding="selectedHolding" />
@@ -93,3 +197,17 @@ function onSelectTicker(ticker) {
     </main>
   </div>
 </template>
+
+<style scoped>
+.status-bar {
+  padding: 8px 12px;
+  color: #9ca3af;
+  font-size: 12px;
+  background: #1f2937;
+  display: flex;
+  gap: 15px;
+}
+.error-text { color: #fca5a5; }
+.loading-text { color: #60a5fa; }
+/* 레이아웃 관련 CSS는 기존 스타일 유지 */
+</style>

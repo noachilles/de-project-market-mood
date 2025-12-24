@@ -16,17 +16,17 @@
         </div>
 
         <div class="volume">
-          거래량: {{ (stock.volume ?? 0).toLocaleString("ko-KR") }}주
+          거래량: {{ (stock.vol || 0).toLocaleString("ko-KR") }}주
         </div>
       </div>
     </div>
 
     <div class="header-right">
       <div class="pill-tag">
-        <span>AI 기반 종목 인사이트</span>
+        <span></span>
       </div>
       <button class="primary-btn">
-        <span class="icon">✨</span> AI Insights 보기
+        <span class="icon">✨</span> AI 챗봇 이용하기
       </button>
     </div>
   </header>
@@ -43,6 +43,17 @@
 
 <script setup>
 const props = defineProps({
+<<<<<<< HEAD
+  stock: { type: Object, default: () => ({ price: 0, change: 0, vol: 0 }) }
+});
+
+const formatKRW = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
+const formatChange = (val) => {
+  const num = Number(val || 0);
+  return `${num > 0 ? '+' : ''}${num.toFixed(2)}%`;
+};
+const toneClass = (val) => (Number(val) > 0 ? 'up' : Number(val) < 0 ? 'down' : '');
+=======
   stock: {
     type: Object,
     default: null, // ✅ required 제거 + 안전 처리
@@ -59,6 +70,7 @@ function formatChange(v) {
 function toneClass(v) {
   return Number(v || 0) >= 0 ? "pos" : "neg";
 }
+>>>>>>> origin/develop
 </script>
 
 <style scoped>
