@@ -105,46 +105,82 @@ def _parse_range(range_str: str):
     return mapping.get(range_str, timedelta(days=1))  # default 1d
 
 
+# def chart(request, code: str):
+#     """
+#     GET /api/chart/{code}?range=1d
+#     - Postgres(Timescale)에서 stock_prices 조회
+#     - Vue/Chart.js가 바로 쓰기 좋은 형태로 반환
+#     """
+#     range_str = request.GET.get("range", "1d")
+#     delta = _parse_range(range_str)
+#     since = timezone.now() - delta
+
+#     # ✅ Timescale 조회 (raw SQL이 제일 단순/확실)
+#     with connection.cursor() as cursor:
+#         cursor.execute(
+#             """
+#             SELECT time, close, volume
+#             FROM stocks_stockprice  -- 모델명에 따른 테이블명 수정
+#             WHERE stock_id = %s AND time >= %s -- 필드명 수정 (stock_id)
+#             ORDER BY time ASC
+#             """,
+#             [code, since]
+#         )
+#         rows = cursor.fetchall()
+
+#     labels = []
+#     prices = []
+#     volumes = []
+
+#     for ts, price, volume in rows:
+#         # ts는 aware datetime일 수 있음 → ISO로 통일
+#         labels.append(ts.isoformat())
+#         prices.append(price)
+#         volumes.append(volume)
+
+#     return JsonResponse({
+#         "code": code,
+#         "range": range_str,
+#         "labels": labels,      # x축
+#         "price": prices,       # line
+#         "volume": volumes,     # bar 등으로 사용 가능
+#         # sentiment/flow는 아직 없으니 일단 빈 배열(프론트 깨짐 방지)
+#         "sentiment": [],
+#         "flow": [],
+#     })
+
 def chart(request, code: str):
-    """
-    GET /api/chart/{code}?range=1d
-    - Postgres(Timescale)에서 stock_prices 조회
-    - Vue/Chart.js가 바로 쓰기 좋은 형태로 반환
-    """
     range_str = request.GET.get("range", "1d")
     delta = _parse_range(range_str)
     since = timezone.now() - delta
 
-    # ✅ Timescale 조회 (raw SQL이 제일 단순/확실)
     with connection.cursor() as cursor:
         cursor.execute(
             """
-            SELECT ts, price, volume
-            FROM stock_prices
-            WHERE code = %s AND ts >= %s
-            ORDER BY ts ASC
+            SELECT time, close, volume
+            FROM stocks_stockprice  -- Django 모델 테이블명
+            WHERE stock_id = %s AND time >= %s -- stock_code는 DB에서 stock_id 컬럼이 됨
+            ORDER BY time ASC
             """,
             [code, since]
         )
         rows = cursor.fetchall()
 
-    labels = []
-    prices = []
-    volumes = []
+    # 데이터가 없어도 500 에러를 내지 않고 빈 배열 반환
+    if not rows:
+        return JsonResponse({
+            "code": code, "range": range_str, "labels": [], 
+            "price": [], "volume": [], "sentiment": [], "flow": []
+        })
 
+    labels, prices, volumes = [], [], []
     for ts, price, volume in rows:
-        # ts는 aware datetime일 수 있음 → ISO로 통일
         labels.append(ts.isoformat())
         prices.append(price)
         volumes.append(volume)
 
     return JsonResponse({
-        "code": code,
-        "range": range_str,
-        "labels": labels,      # x축
-        "price": prices,       # line
-        "volume": volumes,     # bar 등으로 사용 가능
-        # sentiment/flow는 아직 없으니 일단 빈 배열(프론트 깨짐 방지)
-        "sentiment": [],
-        "flow": [],
+        "code": code, "range": range_str, "labels": labels,
+        "price": prices, "volume": volumes,
+        "sentiment": [], "flow": [],
     })

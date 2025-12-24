@@ -1,16 +1,56 @@
 <!-- src/views/Dashboard.vue (or 해당 위치) -->
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue"; // watch 추가
+import { useRoute } from "vue-router";
 
 import Header from "@/components/dashboard/Header.vue";
 import WatchList from "@/components/dashboard/WatchList.vue";
 import StockChart from "@/components/dashboard/StockChart.vue";
 import NewsFeed from "@/components/dashboard/NewsFeed.vue";
 import AiInsight from "@/components/dashboard/AiInsight.vue";
-import { useRoute } from "vue-router";
-import { watch } from "vue";
+
+/* =========================
+   0) API 설정
+========================= */
 
 const route = useRoute();
+const API_BASE = "http://localhost:8000";
+
+
+
+/* =========================
+   1) 관심종목 마스터 (초기값은 더미)
+========================= */
+const watchItems = ref([
+  { ticker: "005930", name: "삼성전자", price: 0, change: 0, volume: 0 },
+  { ticker: "000660", name: "SK하이닉스", price: 0, change: 0, volume: 0 },
+]);
+
+const selectedTicker = ref(watchItems.value[0].ticker);
+const aiNewsList = ref([]); // 백엔드에서 받아올 AI 뉴스 리스트
+const isNewsLoading = ref(false);
+
+/* =========================
+   2) API 호출 로직 (AI 뉴스 가져오기)
+========================= */
+async function fetchAiNews(ticker) {
+  isNewsLoading.value = true;
+  try {
+    // 주소 끝에 /를 붙여서 Django의 append_slash 규칙에 대응합니다.
+    const response = await fetch(`${API_BASE}/api/news/?ticker=${ticker}&size=5`);
+    
+    if (!response.ok) throw new Error("Network response was not ok");
+    
+    const data = await response.json();
+    aiNewsList.value = data.items || [];
+    
+    console.log("✅ AI 뉴스 로드 성공:", aiNewsList.value); // 확인용 로그
+  } catch (e) {
+    console.error("AI 뉴스 로드 실패:", e);
+  } finally {
+    isNewsLoading.value = false;
+  }
+}
 
 watch(
   () => route.query.code,
@@ -22,10 +62,10 @@ watch(
   { immediate: true }
 );
 
-/* =========================
-   0) API 설정
-========================= */
-const API_BASE = "http://localhost:8000";
+// 선택된 종목 변경 감시 -> AI 뉴스 새로고침
+watch(selectedTicker, (newTicker) => {
+  if (newTicker) fetchAiNews(newTicker);
+}, { immediate: true });
 
 /**
  * current-price API 호출
@@ -54,22 +94,6 @@ async function fetchCurrentPrice(code) {
   return await res.json(); // {"code","price","change_rate","volume","timestamp"}
 }
 
-/* =========================
-   1) 관심종목 마스터 (초기값은 더미)
-========================= */
-const watchItems = ref([
-  { ticker: "005930", name: "삼성전자", price: 0, change: 0, volume: 0 },
-  { ticker: "000660", name: "SK하이닉스", price: 0, change: 0, volume: 0 },
-]);
-
-/* =========================
-   2) 선택 상태
-========================= */
-const selectedTicker = ref(watchItems.value[0].ticker);
-
-const selectedStock = computed(() => {
-  return watchItems.value.find((w) => w.ticker === selectedTicker.value) ?? null;
-});
 
 /* =========================
    3) 전날 리포트 (더미 유지)
@@ -104,7 +128,27 @@ const reportsByTicker = {
   },
 };
 
-const selectedReport = computed(() => reportsByTicker[selectedTicker.value] ?? null);
+const selectedReport = computed(() => {
+  if (aiNewsList.value.length === 0) return null;
+
+  // 가장 최신 뉴스(첫 번째 아이템)를 가져와서 하위 컴포넌트 양식에 맞게 변환
+  const latest = aiNewsList.value[0];
+  
+  return {
+    date: latest.published_at.split('T')[0], // 날짜만 추출
+    tag: "실시간 AI 분석",
+    summary: latest.content_summary,
+    bullets: aiNewsList.value.slice(1, 4).map(n => n.title), // 나머지 뉴스 제목들을 리스트로
+    stats: [
+      { 
+        label: "AI 감정 점수", 
+        value: latest.sentiment_score.toFixed(2), 
+        tone: latest.sentiment_score >= 0 ? "pos" : "neg" 
+      }
+    ],
+    todayFocus: "최신 뉴스 헤드라인 분석 중"
+  };
+});
 
 /* =========================
    4) 이벤트
@@ -215,8 +259,16 @@ onBeforeUnmount(() => {
 
       <!-- 오른쪽 -->
       <section class="column right">
-        <AiInsight :ticker="selectedTicker" />
-        <NewsFeed :ticker="selectedTicker" />
+        <AiInsight 
+          :ticker="selectedTicker" 
+          :news="aiNewsList" 
+        />
+        
+        <NewsFeed 
+          :ticker="selectedTicker" 
+          :news="aiNewsList" 
+          :loading="isNewsLoading" 
+        />
       </section>
     </main>
   </div>

@@ -6,7 +6,7 @@ FROM apache/spark:3.5.1
 USER root
 
 # 2. 라이브러리 설치
-RUN pip install --no-cache-dir requests beautifulsoup4 lxml elasticsearch
+RUN pip install --no-cache-dir requests beautifulsoup4 lxml elasticsearch psycopg2-binary python-dotenv
 
 # ★ 핵심 해결책: "UID 185는 spark라는 유저야"라고 OS에 명찰을 달아주는 작업
 # 이 줄이 없으면 자바가 "내 이름이 뭐야?" 하다가 죽습니다.
