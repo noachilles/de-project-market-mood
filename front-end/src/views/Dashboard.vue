@@ -1,4 +1,3 @@
-<!-- src/views/Dashboard.vue (or 해당 위치) -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { useRoute } from "vue-router";
@@ -8,10 +7,12 @@ import WatchList from "@/components/dashboard/WatchList.vue";
 import StockChart from "@/components/dashboard/StockChart.vue";
 import NewsFeed from "@/components/dashboard/NewsFeed.vue";
 import AiInsight from "@/components/dashboard/AiInsight.vue";
+import { fetchCurrentPrice } from "@/services/stocks";
 
 /* =========================
-   0) API 및 상태 설정
+   0) 상태 및 API 설정
 ========================= */
+const livePriceData = ref([]); // ✅ 차트에 보낼 실시간 데이터 배열
 const route = useRoute();
 const API_BASE = "http://localhost:8000";
 
@@ -22,169 +23,160 @@ const watchItems = ref([
 
 const selectedTicker = ref(watchItems.value[0].ticker);
 const aiNewsList = ref([]); 
-const dailyReport = ref(null); // DB: StockDailyReport
+const dailyReport = ref(null);
 const isNewsLoading = ref(false);
 
+// 폴링 및 에러 상태
+const polling = ref(false);
+const lastUpdatedAt = ref(null);
+const lastError = ref(null);
+let timer = null;
+
+/* ✅ Header에 전달할 현재 선택된 종목 정보 */
+const selectedStock = computed(() => {
+  return watchItems.value.find((w) => w.ticker === selectedTicker.value) ?? null;
+});
+
 /* =========================
-   1) 데이터 fetch 로직
+   1) 데이터 Fetch 로직 (AI & News)
 ========================= */
-// Dashboard.vue 수정
 async function fetchStockData(ticker) {
   isNewsLoading.value = true;
+  lastError.value = null;
 
-  // 개별적으로 실행하여 서로의 실패가 영향을 주지 않도록 함
+  // 뉴스 로드 (Elasticsearch 기반)
   const loadNews = async () => {
     try {
-      const newsRes = await fetch(`${API_BASE}/api/news/?ticker=${ticker}&size=5`);
-      if (!newsRes.ok) throw new Error("News API status error");
-      const newsData = await newsRes.json();
-      aiNewsList.value = newsData.items || [];
+      const res = await fetch(`${API_BASE}/api/news/?ticker=${ticker}&size=5`);
+      if (!res.ok) throw new Error("News API 에러");
+      const data = await res.json();
+      aiNewsList.value = data.items || [];
     } catch (e) {
-      console.warn("⚠️ 뉴스 로드 실패 (ES 확인 필요):", e);
-      aiNewsList.value = []; // 실패 시 빈 배열 처리
+      console.warn("⚠️ 뉴스 로드 실패:", e);
+      aiNewsList.value = [];
     }
   };
 
+  // 차트 및 AI 리포트 로드 (Postgres 기반)
   const loadChartAndReport = async () => {
     try {
-      // 404 방지를 위해 슬래시(/)를 명시적으로 포함
-      const reportRes = await fetch(`${API_BASE}/api/chart/${ticker}/?range=1w`);
-      if (!reportRes.ok) throw new Error("Report API status error");
+      const res = await fetch(`${API_BASE}/api/chart/${ticker}/?range=1w`);
+      if (!res.ok) throw new Error("Chart/Report API 에러");
+      const data = await res.json();
       
-      const chartData = await reportRes.json();
-      
-      // AI 리포트 추출 로직
-      const reportDates = Object.keys(chartData.ai_reports || {}).sort().reverse();
+      // 최신 AI 리포트 추출
+      const reportDates = Object.keys(data.ai_reports || {}).sort().reverse();
       if (reportDates.length > 0) {
         const latestDate = reportDates[0];
-        dailyReport.value = {
-          ...chartData.ai_reports[latestDate],
-          date: latestDate
-        };
+        dailyReport.value = { ...data.ai_reports[latestDate], date: latestDate };
+      } else {
+        dailyReport.value = null;
       }
     } catch (e) {
       console.error("❌ 분석 리포트 로드 실패:", e);
     }
   };
 
-  // 두 함수를 동시에 실행 (하나가 거절되어도 나머지는 계속됨)
   await Promise.allSettled([loadNews(), loadChartAndReport()]);
   isNewsLoading.value = false;
 }
-async function fetchCurrentPrice(code) {
-  const res = await fetch(`${API_BASE}/api/current-price/${code}`);
-  return await res.json();
-}
 
 /* =========================
-   2) 감시 및 이벤트 로직
+   2) 현재가 실시간 갱신 (Redis 기반)
 ========================= */
-watch(selectedTicker, (newTicker) => {
-  if (newTicker) fetchStockData(newTicker);
-}, { immediate: true });
-
-watch(
-  () => route.query.code,
-  (code) => {
-    if (code) selectedTicker.value = code;
-  },
-  { immediate: true }
-);
-
-function onSelectTicker(ticker) {
-  selectedTicker.value = ticker;
-}
-
-/* =========================
-   3) 리포트 변환 로직 (WatchList 전달용)
-========================= */
-const selectedReport = computed(() => {
-  // 1순위: DB에 저장된 종합 리포트가 있는 경우
-  if (dailyReport.value) {
-    return {
-      date: dailyReport.value.date,
-      tag: "AI 종합 브리핑",
-      summary: dailyReport.value.summary,
-      bullets: aiNewsList.value.slice(0, 3).map(n => n.title),
-      stats: [
-        { 
-          label: "AI 감정 지수", 
-          value: dailyReport.value.sentiment.toFixed(2), 
-          tone: dailyReport.value.sentiment >= 0 ? "pos" : "neg" 
-        }
-      ],
-      todayFocus: "주요 매물대 및 뉴스 모멘텀 분석"
-    };
-  }
-
-  // 2순위: 종합 리포트는 없지만 개별 뉴스는 있는 경우 (실시간 분석 모드)
-  if (aiNewsList.value.length > 0) {
-    const latest = aiNewsList.value[0];
-    return {
-      date: latest.published_at.split('T')[0],
-      tag: "실시간 뉴스 분석",
-      summary: latest.content_summary,
-      bullets: aiNewsList.value.slice(1, 4).map(n => n.title),
-      stats: [
-        { label: "감정 점수", value: latest.sentiment_score.toFixed(2), tone: latest.sentiment_score >= 0 ? "pos" : "neg" }
-      ],
-      todayFocus: "최신 뉴스 헤드라인 분석 중"
-    };
-  }
-
-  return null;
-});
-
-/* =========================
-   4) 현재가 폴링 (기존 유지)
-========================= */
-// ... (refreshAllPrices 및 setInterval 로직은 기존과 동일하므로 생략 가능하나 그대로 유지)
-const polling = ref(false);
-const lastUpdatedAt = ref(null);
-const lastError = ref(null);
-let timer = null;
-
+// Dashboard.vue 의 refreshAllPrices 함수 내부
 async function refreshAllPrices() {
   polling.value = true;
   try {
-    const results = await Promise.allSettled(watchItems.value.map(it => fetchCurrentPrice(it.ticker)));
-    results.forEach((r, idx) => {
-      if (r.status === "fulfilled" && r.value.price) {
-        watchItems.value[idx].price = Number(r.value.price);
-        watchItems.value[idx].change = Number(r.value.change_rate || 0);
-        watchItems.value[idx].volume = Number(r.value.volume || 0);
+    const results = await Promise.allSettled(
+      watchItems.value.map(it => fetchCurrentPrice(it.ticker))
+    );
+
+    results.forEach((res, idx) => {
+      if (res.status === "fulfilled" && res.value && res.value.price) {
+        const item = watchItems.value[idx];
+        const data = res.value; // 백엔드 응답 데이터
+
+        item.price = Number(data.price);
+        item.change = Number(data.change_rate || 0);
+        
+        // ✅ [핵심] 백엔드의 "volume": 22 데이터를 Header가 인식하는 "vol"에 할당
+        item.vol = Number(data.volume || 0); 
+
+        if (item.ticker === selectedTicker.value) {
+          const now = new Date();
+          const nextPoint = { x: now, y: item.price };
+          // 무한 루프 방지용 새 배열 할당
+          livePriceData.value = [...livePriceData.value, nextPoint].slice(-1200);
+        }
       }
     });
-    lastUpdatedAt.value = new Date().toISOString();
+    lastUpdatedAt.value = new Date().toLocaleTimeString();
   } catch (e) {
-    lastError.value = String(e);
+    console.error("❌ 데이터 수집 에러:", e);
   } finally {
     polling.value = false;
   }
 }
 
+// 종목 변경 시 실시간 데이터 초기화
+watch(selectedTicker, () => {
+  livePriceData.value = [];
+  fetchStockData(selectedTicker.value);
+}, { immediate: true });
+
+/* =========================
+   3) 이벤트 핸들러 및 감시
+========================= */
+// Header나 WatchList에서 종목 선택 시 실행
+function onSelectTicker(ticker) {
+  selectedTicker.value = ticker;
+}
+
+// 종목 변경 감시 -> 데이터 로드
+watch(selectedTicker, (newTicker) => {
+  if (newTicker) fetchStockData(newTicker);
+}, { immediate: true });
+
+// URL 쿼리 파라미터 감시
+watch(() => route.query.code, (code) => {
+  if (code) selectedTicker.value = code;
+}, { immediate: true });
+
+/* ✅ WatchList에 전달할 리포트 데이터 변환 */
+const selectedReport = computed(() => {
+  if (!dailyReport.value) return null;
+  return {
+    date: dailyReport.value.date,
+    tag: "AI 종합 브리핑",
+    summary: dailyReport.value.summary,
+    bullets: aiNewsList.value.slice(0, 3).map(n => n.title),
+    stats: [
+      { label: "AI 감정 지수", value: dailyReport.value.sentiment.toFixed(2), tone: dailyReport.value.sentiment >= 0 ? "pos" : "neg" }
+    ],
+    todayFocus: "뉴스 모멘텀 분석 중"
+  };
+});
+
 onMounted(() => {
   refreshAllPrices();
-  timer = setInterval(refreshAllPrices, 3000);
+  timer = setInterval(refreshAllPrices, 3000); // 3초마다 Redis 확인
 });
+
 onBeforeUnmount(() => clearInterval(timer));
 </script>
+
 <template>
   <div class="dashboard-shell">
-    <!-- ✅ 헤더 검색에서 종목 선택 emit("select", code) 받기 -->
     <Header :stock="selectedStock" @select="onSelectTicker" />
 
-    <!-- (선택) 상태 표시 -->
-    <div style="padding: 8px 12px; color: #9ca3af; font-size: 12px;">
-      <span v-if="polling">현재가 갱신 중…</span>
-      <span v-else>마지막 갱신: {{ lastUpdatedAt ?? "없음" }}</span>
-      <span v-if="lastError" style="margin-left: 10px; color: #fca5a5;">
-        (에러: {{ lastError }})
-      </span>
+    <div class="status-bar">
+      <span v-if="polling" class="loading-text">🔄 현재가 갱신 중…</span>
+      <span v-else class="time-text">⏱ 마지막 갱신: {{ lastUpdatedAt ?? "없음" }}</span>
+      <span v-if="lastError" class="error-text">⚠️ {{ lastError }}</span>
     </div>
 
     <main class="layout">
-      <!-- 왼쪽 -->
       <section class="column left">
         <WatchList
           :items="watchItems"
@@ -194,12 +186,13 @@ onBeforeUnmount(() => clearInterval(timer));
         />
       </section>
 
-      <!-- 중앙 -->
       <section class="column center">
-        <StockChart :ticker="selectedTicker" />
+        <StockChart 
+          :ticker="selectedTicker" 
+          :live-data="livePriceData" 
+        />
       </section>
 
-      <!-- 오른쪽 -->
       <section class="column right">
         <AiInsight 
           :ticker="selectedTicker" 
@@ -215,3 +208,17 @@ onBeforeUnmount(() => clearInterval(timer));
     </main>
   </div>
 </template>
+
+<style scoped>
+.status-bar {
+  padding: 8px 12px;
+  color: #9ca3af;
+  font-size: 12px;
+  background: #1f2937;
+  display: flex;
+  gap: 15px;
+}
+.error-text { color: #fca5a5; }
+.loading-text { color: #60a5fa; }
+/* 레이아웃 관련 CSS는 기존 스타일 유지 */
+</style>

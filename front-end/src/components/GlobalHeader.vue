@@ -59,7 +59,7 @@
 
         <!-- ✅ 로그인 전 -->
         <button v-if="!isLoggedIn" class="login-btn" @click="openLogin">
-          로그인
+          로그아웃
         </button>
 
         <!-- ✅ 로그인 후: 유저 드롭다운 -->
