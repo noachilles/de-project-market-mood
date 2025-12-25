@@ -1,18 +1,20 @@
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view # ✅ @require_http_methods 대신 사용
+from rest_framework.response import Response
 from datetime import datetime, timedelta
 import os
 from elasticsearch import Elasticsearch
 import json
 from core.utils.openai_client import get_openai_client
 
-# Elasticsearch 클라이언트 설정
+# ✅ Swagger 임포트
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
+from rest_framework import serializers
+
 ES_HOST = os.getenv("ELASTICSEARCH_HOST", "elasticsearch")
 ES_PORT = int(os.getenv("ELASTICSEARCH_PORT", "9200"))
 ES_INDEX = os.getenv("ELASTICSEARCH_NEWS_INDEX", "news")
 
 def _get_elasticsearch_client():
-    """Elasticsearch 클라이언트 반환"""
     try:
         return Elasticsearch([f"http://{ES_HOST}:{ES_PORT}"])
     except Exception as e:
@@ -20,38 +22,32 @@ def _get_elasticsearch_client():
         return None
 
 
-@require_http_methods(["GET"])
+@extend_schema(
+    summary="뉴스 목록 조회",
+    description="특정 종목(ticker)과 관련된 최신 뉴스를 가져옵니다.",
+    parameters=[
+        OpenApiParameter(name='ticker', description='종목 코드 (예: 005930)', required=True, type=str),
+        OpenApiParameter(name='size', description='가져올 뉴스 개수 (기본: 5)', required=False, type=int),
+    ],
+    responses={200: OpenApiTypes.OBJECT}
+)
+@api_view(['GET']) # ✅ DRF 뷰로 변환
 def news_list(request):
-    """
-    GET /api/news/?ticker=005930&size=5
-    - 최근 뉴스 목록 조회 (NewsFeed용)
-    - 타이틀에 종목명이 포함된 뉴스 검색
-    """
     ticker = request.GET.get("ticker", "")
     size = int(request.GET.get("size", 5))
     
     if not ticker:
-        return JsonResponse({
-            "error": "ticker 파라미터가 필요합니다."
-        }, status=400)
+        return Response({"error": "ticker 파라미터가 필요합니다."}, status=400)
     
-    # 종목 코드를 종목명으로 매핑
     stock_name_map = {
-        "005930": "삼성전자",
-        "000660": "SK하이닉스",
-        "035420": "NAVER",
-        "035720": "카카오",
-        "005380": "현대차",
-        "051910": "LG화학",
+        "005930": "삼성전자", "000660": "SK하이닉스", "035420": "NAVER",
+        "035720": "카카오", "005380": "현대차", "051910": "LG화학",
     }
     stock_name = stock_name_map.get(ticker, "")
     
     es = _get_elasticsearch_client()
     if not es:
-        return JsonResponse({
-            "items": [],
-            "message": "Elasticsearch 연결 실패"
-        })
+        return Response({"items": [], "message": "Elasticsearch 연결 실패"})
     
     # Elasticsearch 쿼리: 타이틀에 종목명이 포함된 뉴스 검색
     # stock_codes로 필터링하거나 타이틀에 종목명이 포함된 뉴스 검색
@@ -116,20 +112,29 @@ def news_list(request):
                 "original_url": original_url,
             })
         
-        return JsonResponse({
+        return Response({
             "ticker": ticker,
             "items": items,
             "count": len(items)
         })
         
     except Exception as e:
-        return JsonResponse({
+        return Response({
             "items": [],
             "error": str(e)
         }, status=500)
 
 
-@require_http_methods(["GET"])
+@extend_schema(
+    summary="특정 날짜 뉴스 조회",
+    description="캔들 차트에서 특정 날짜를 클릭/호버했을 때 해당 일자의 뉴스를 보여줍니다.",
+    parameters=[
+        OpenApiParameter(name='ticker', description='종목 코드', required=True, type=str),
+        OpenApiParameter(name='date', description='날짜 (YYYY-MM-DD)', required=True, type=str),
+    ],
+    responses={200: OpenApiTypes.OBJECT}
+)
+@api_view(['GET'])
 def news_by_date(request):
     """
     GET /api/news/by-date/?ticker=005930&date=2024-12-25
@@ -139,7 +144,7 @@ def news_by_date(request):
     date_str = request.GET.get("date", "")
     
     if not ticker or not date_str:
-        return JsonResponse({
+        return Response({
             "error": "ticker와 date 파라미터가 필요합니다."
         }, status=400)
     
@@ -151,7 +156,7 @@ def news_by_date(request):
         
         es = _get_elasticsearch_client()
         if not es:
-            return JsonResponse({
+            return Response({
                 "items": [],
                 "message": "Elasticsearch 연결 실패"
             })
@@ -199,7 +204,7 @@ def news_by_date(request):
                     "sentiment_score": source.get("sentiment_score", 0.0),
                 })
             
-            return JsonResponse({
+            return Response({
                 "ticker": ticker,
                 "date": date_str,
                 "items": items,
@@ -207,22 +212,26 @@ def news_by_date(request):
             })
             
         except Exception as e:
-            return JsonResponse({
+            return Response({
                 "items": [],
                 "error": str(e)
             }, status=500)
             
     except ValueError:
-        return JsonResponse({
+        return Response({
             "error": "날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식을 사용하세요."
         }, status=400)
     except Exception as e:
-        return JsonResponse({
+        return Response({
             "error": str(e)
         }, status=500)
 
-
-@require_http_methods(["GET"])
+@extend_schema(
+    summary="실시간 Hot 키워드",
+    description="최근 7일간 뉴스 데이터에서 가장 많이 언급된 키워드 TOP 5를 반환합니다.",
+    responses={200: OpenApiTypes.OBJECT}
+)
+@api_view(['GET'])
 def hot_keywords(request):
     """
     GET /api/news/hot-keywords/
@@ -231,7 +240,7 @@ def hot_keywords(request):
     """
     es = _get_elasticsearch_client()
     if not es:
-        return JsonResponse({
+        return Response({
             "keywords": [],
             "message": "Elasticsearch 연결 실패"
         }, status=500)
@@ -305,7 +314,7 @@ def hot_keywords(request):
             if len(keywords) >= 5:
                 break
         
-        return JsonResponse({
+        return Response({
             "keywords": keywords[:5],  # 최대 5개
             "period": "7일",
             "total_news": response.get("hits", {}).get("total", {}).get("value", 0)
@@ -314,13 +323,22 @@ def hot_keywords(request):
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return JsonResponse({
+        return Response({
             "keywords": [],
             "error": str(e)
         }, status=500)
 
 
-@require_http_methods(["POST"])
+@extend_schema(
+    summary="뉴스 기반 AI 채팅 (Deprecated)",
+    description="뉴스 앱 내부의 간단한 챗봇 기능입니다. (chat 앱의 AskQuestionView 사용 권장)",
+    request=inline_serializer(
+        name='NewsChatRequest',
+        fields={'question': serializers.CharField()}
+    ),
+    responses={200: OpenApiTypes.OBJECT}
+)
+@api_view(['POST'])
 def chat(request):
     """
     POST /api/news/chat/
@@ -332,13 +350,13 @@ def chat(request):
         question = data.get("question", "").strip()
         
         if not question:
-            return JsonResponse({
+            return Response({
                 "error": "question 파라미터가 필요합니다."
             }, status=400)
         
         es = _get_elasticsearch_client()
         if not es:
-            return JsonResponse({
+            return Response({
                 "error": "Elasticsearch 연결 실패"
             }, status=500)
         
@@ -396,7 +414,7 @@ def chat(request):
             
             # 뉴스가 없으면 기본 메시지 반환
             if not news_items:
-                return JsonResponse({
+                return Response({
                     "answer": "죄송합니다. 관련 뉴스를 찾을 수 없습니다.",
                     "sources": []
                 })
@@ -448,7 +466,7 @@ def chat(request):
             # 3. 참고한 뉴스 제목 목록
             sources = [item["title"] for item in news_items]
             
-            return JsonResponse({
+            return Response({
                 "answer": answer,
                 "sources": sources
             })
@@ -456,17 +474,17 @@ def chat(request):
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return JsonResponse({
+            return Response({
                 "error": f"뉴스 검색 실패: {str(e)}"
             }, status=500)
             
     except json.JSONDecodeError:
-        return JsonResponse({
+        return Response({
             "error": "잘못된 JSON 형식입니다."
         }, status=400)
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return JsonResponse({
+        return Response({
             "error": str(e)
         }, status=500)

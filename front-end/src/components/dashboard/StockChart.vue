@@ -80,10 +80,10 @@ const newsCache = ref({}); // { "2024-12-25": [{title: "...", ...}] }
 
 const labelRange = computed(() => {
   const map = {
-    rt: "실시간 (1분 캔들)",
-    "1w": "1주 (오전/오후 캔들)",
-    "1m": "1달 (일봉 캔들)",
-    "3m": "3달 (일봉 캔들)",
+    rt: "실시간",
+    "1w": "1주",
+    "1m": "1달",
+    "3m": "3달",
   };
   return map[range.value] ?? "실시간";
 });
