@@ -101,6 +101,8 @@ function handleNewsClick(url) {
   list-style: none;
   padding: 0;
   margin: 0;
+  width: 100%; /* 리스트가 부모 너비를 넘지 않도록 설정 */
+  overflow: hidden; /* 안전장치 */
 }
 
 .news-item {
@@ -112,6 +114,11 @@ function handleNewsClick(url) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  /* ✅ 중요: 아이템 자체가 부모를 뚫고 나가지 않도록 설정 */
+  width: 100%;
+  max-width: 100%; 
+  overflow: hidden; 
+  box-sizing: border-box; /* 패딩 포함 너비 계산 */
 }
 
 .news-item:last-child {
@@ -134,10 +141,16 @@ function handleNewsClick(url) {
 
 .news-title {
   flex: 1;
+  min-width: 0;
+  min-width: 0;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
+
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block; /* span 태그의 동작을 명확하게 함 */
 }
 
 .link-icon {

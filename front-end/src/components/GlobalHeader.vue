@@ -82,10 +82,16 @@ function goDashboard() {
 }
 
 /* 검색 */
-const keyword = ref("");
 const search = () => {
-  if (!keyword.value.trim()) return;
-  alert(`검색: ${keyword.value}`);
+  const q = keyword.value.trim();
+  if (!q) return;
+  
+  // ✅ 수정된 부분: 알림창 대신 페이지 이동
+  // /stocks 페이지로 이동하면서 쿼리 스트링(?q=삼성)을 함께 보냄
+  router.push({ path: '/stocks', query: { q: q } });
+  
+  // (선택사항) 검색 후 입력창 초기화
+  keyword.value = ""; 
 };
 
 /* 모달 상태 */

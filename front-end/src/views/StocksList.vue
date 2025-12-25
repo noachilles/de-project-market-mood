@@ -1,6 +1,5 @@
 <template>
   <div class="stocks-shell">
-    <!-- 페이지 헤더 -->
     <div class="page-head card">
       <div>
         <div class="title">전체 종목</div>
@@ -23,7 +22,6 @@
       </div>
     </div>
 
-    <!-- 컨트롤 영역 -->
     <div class="controls card">
       <div class="search">
         <input
@@ -48,7 +46,6 @@
       </div>
     </div>
 
-    <!-- 리스트 -->
     <div class="card list-card">
       <div class="card-header-row">
         <div class="card-title">종목 리스트</div>
@@ -61,11 +58,12 @@
         <table class="table">
           <thead>
             <tr>
-              <th style="width: 34%">종목명</th>
-              <th style="width: 16%">코드</th>
-              <th style="width: 18%">현재가</th>
-              <th style="width: 16%">등락률</th>
-              <th style="width: 16%">거래량</th>
+              <th style="width: 30%">종목명</th>
+              <th style="width: 15%">코드</th>
+              <th style="width: 15%">현재가</th>
+              <th style="width: 15%">등락률</th>
+              <th style="width: 15%">거래량</th>
+              <th style="width: 10%; text-align: center;">관심</th>
             </tr>
           </thead>
 
@@ -83,10 +81,36 @@
                 {{ formatChange(s.change) }}
               </td>
               <td class="num">{{ formatVolume(s.volume) }}</td>
+              
+              <td class="star-cell">
+                <button class="star-btn" @click.stop="toggleFavorite(s)">
+                  <svg 
+                    v-if="s.isFavorite" 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    viewBox="0 0 24 24" 
+                    fill="currentColor" 
+                    class="star-icon filled"
+                  >
+                    <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.005Z" clip-rule="evenodd" />
+                  </svg>
+                  
+                  <svg 
+                    v-else 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    fill="none" 
+                    viewBox="0 0 24 24" 
+                    stroke-width="1.5" 
+                    stroke="currentColor" 
+                    class="star-icon empty"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.545.044.766.757.375 1.154l-4.182 4.24a.563.563 0 0 0-.166.524l1.233 5.393c.127.553-.467 1.054-.937.767L12 18.256a.563.563 0 0 0-.554 0l-4.71 2.866c-.47.287-1.064-.214-.937-.767l1.233-5.393a.563.563 0 0 0-.166-.524l-4.182-4.24c-.39-.397-.17-1.11.375-1.154l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" />
+                  </svg>
+                </button>
+              </td>
             </tr>
 
             <tr v-if="paged.length === 0">
-              <td colspan="5" class="empty">
+              <td colspan="6" class="empty">
                 검색 결과가 없습니다.
               </td>
             </tr>
@@ -94,7 +118,6 @@
         </table>
       </div>
 
-      <!-- 페이지네이션 (MVP) -->
       <div class="pager" v-if="filtered.length > pageSize">
         <button class="pager-btn" :disabled="page === 1" @click="page--">이전</button>
         <div class="pager-info">{{ page }} / {{ totalPages }}</div>
@@ -117,13 +140,20 @@ import { useRouter } from "vue-router";
 const router = useRouter();
 
 /* ------------------ 더미 데이터 (나중에 API로 교체) ------------------ */
+/* 요구사항: 삼성전자(005930)만 isFavorite: true, 나머지는 false */
 const stocks = ref([
-  { ticker: "005930", name: "삼성전자", price: 85300, change: 2.55, volume: 1250000 },
-  { ticker: "000660", name: "SK하이닉스", price: 135000, change: -1.15, volume: 980000 },
-  { ticker: "035420", name: "NAVER", price: 212000, change: 0.35, volume: 220000 },
-  { ticker: "035720", name: "카카오", price: 57500, change: -0.62, volume: 410000 },
-  { ticker: "051910", name: "LG화학", price: 412000, change: 1.12, volume: 90000 },
+  { ticker: "005930", name: "삼성전자", price: 85300, change: 2.55, volume: 1250000, isFavorite: true },
+  { ticker: "000660", name: "SK하이닉스", price: 135000, change: -1.15, volume: 980000, isFavorite: false },
+  { ticker: "035420", name: "NAVER", price: 212000, change: 0.35, volume: 220000, isFavorite: false },
+  { ticker: "035720", name: "카카오", price: 57500, change: -0.62, volume: 410000, isFavorite: false },
+  { ticker: "051910", name: "LG화학", price: 412000, change: 1.12, volume: 90000, isFavorite: false },
 ]);
+
+/* ------------------ 찜하기 기능 ------------------ */
+function toggleFavorite(item) {
+  item.isFavorite = !item.isFavorite;
+  // 추후 API 연동 시 여기에 로직 추가
+}
 
 /* ------------------ 검색/정렬 ------------------ */
 const query = ref("");
@@ -150,6 +180,9 @@ const filtered = computed(() => {
     const av = a[sortKey.value];
     const bv = b[sortKey.value];
     if (av === bv) return 0;
+    
+    // boolean 값 정렬 (찜한거 위로) 처리 원하면 추가 로직 필요
+    // 여기서는 기존 로직 유지
     return av > bv ? dir : -dir;
   });
 });
@@ -190,6 +223,7 @@ function formatVolume(v) {
 </script>
 
 <style scoped>
+/* 기존 스타일 유지 */
 .stocks-shell {
   max-width: 1600px;
   margin: 0 auto;
@@ -199,7 +233,7 @@ function formatVolume(v) {
   gap: 14px;
 }
 
-/* card base (대시보드 카드 톤 맞추기) */
+/* card base */
 .card {
   background: rgba(17, 34, 64, 0.68);
   border: 1px solid rgba(255,255,255,0.10);
@@ -327,6 +361,40 @@ td {
   text-align: center;
   padding: 22px 8px;
   color: #9ca3af;
+}
+
+/* Star Icon Style */
+.star-cell {
+  text-align: center;
+}
+.star-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+.star-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.star-icon {
+  width: 20px;
+  height: 20px;
+}
+.star-icon.filled {
+  color: #F59E0B; /* Amber-500 (금색) */
+}
+.star-icon.empty {
+  color: #ffffff; /* Gray-400 */
+}
+/* 클릭 시 살짝 커지는 애니메이션 효과 (선택사항) */
+.star-btn:active .star-icon {
+  transform: scale(0.9);
 }
 
 /* pager */

@@ -25,9 +25,6 @@
       <div class="pill-tag">
         <span></span>
       </div>
-      <button class="primary-btn">
-        <span class="icon">✨</span> AI 챗봇 이용하기
-      </button>
     </div>
   </header>
 

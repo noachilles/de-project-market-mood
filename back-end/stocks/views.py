@@ -2,31 +2,48 @@ import json
 import os
 import redis
 from datetime import timedelta, datetime, date as date_type
-from django.http import JsonResponse
 from django.utils import timezone
 from stocks.models import Stock, StockPrice
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.decorators import api_view # ✅ 추가
+from elasticsearch import Elasticsearch
 
-# 모델 임포트 (앱 이름에 맞게 확인 필요)
+# ✅ Swagger 문서화용 라이브러리 임포트
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.types import OpenApiTypes
+
+# 모델 임포트
 from .models import StockDailyReport
 
 
 def _get_redis_client():
-    # docker-compose 기준: redis 호스트명은 "redis"
     return redis.Redis(host="redis", port=6379, decode_responses=True)
 
 
+@extend_schema(
+    summary="주식 현재가 조회",
+    description="Redis 캐시 또는 DB에서 실시간 주가 정보를 조회합니다.",
+    parameters=[
+        OpenApiParameter(name='code', description='종목 코드 (예: 005930)', location=OpenApiParameter.PATH, type=str)
+    ],
+    responses={
+        200: OpenApiTypes.OBJECT,
+        404: OpenApiTypes.OBJECT
+    }
+)
+@api_view(['GET']) # ✅ Django View -> DRF View로 변환
 def current_price(request, code: str):
     r = _get_redis_client()
     val = r.get(f"current_price:{code}")
 
     if val:
-        # Redis에 데이터가 있으면 그대로 반환
         try:
             data = json.loads(val)
         except Exception:
             data = {"raw": val}
 
-        return JsonResponse({
+        return Response({ # JsonResponse -> Response
             "code": code,
             "price": data.get("price"),
             "change_rate": data.get("change_rate"),
@@ -34,27 +51,24 @@ def current_price(request, code: str):
             "timestamp": data.get("timestamp"),
         })
     
-    # Redis에 데이터가 없으면 StockPrice 모델에서 마지막 데이터 조회
+    # Redis에 데이터가 없으면 DB 조회
     try:
         stock = Stock.objects.get(stock_code=code)
         last_price = StockPrice.objects.filter(stock=stock).order_by('-time').first()
         
         if last_price:
-            # 마지막 거래일의 전체 거래량 합계
             from django.db.models import Sum
-            from django.db.models.functions import TruncDate
-            
             last_date = last_price.time.date()
             daily_volume = StockPrice.objects.filter(
                 stock=stock,
                 time__date=last_date
             ).aggregate(total_volume=Sum('volume'))['total_volume'] or 0
             
-            return JsonResponse({
+            return Response({
                 "code": code,
                 "price": last_price.close or last_price.open,
-                "change_rate": 0,  # 마지막 데이터이므로 변동률 0
-                "volume": int(daily_volume),  # 해당일 전체 거래량
+                "change_rate": 0,
+                "volume": int(daily_volume),
                 "timestamp": last_price.time.isoformat(),
                 "message": "Last cached price from database"
             })
@@ -63,40 +77,44 @@ def current_price(request, code: str):
     except Exception as e:
         print(f"⚠️ StockPrice 조회 실패: {e}")
     
-    # 데이터가 전혀 없으면 기본값 반환
-    return JsonResponse(
+    return Response(
         {"code": code, "price": None, "change_rate": 0, "volume": 0, "timestamp": None, "message": "No data available"}
     )
 
 
 def _parse_range(range_str: str):
-    """
-    차트 범위 파라미터 → timedelta
-    range: rt (실시간 1시간) | 1w (1주) | 1m (1달) | 3m (3달)
-    """
     mapping = {
-        "rt": timedelta(hours=1),  # 실시간: 1시간
-        "1w": timedelta(days=7),   # 1주
-        "1m": timedelta(days=30),  # 1달
-        "3m": timedelta(days=90),  # 3달
+        "rt": timedelta(hours=1),
+        "1w": timedelta(days=7),
+        "1m": timedelta(days=30),
+        "3m": timedelta(days=90),
     }
-    return mapping.get(range_str, timedelta(hours=1))  # default 1시간
+    return mapping.get(range_str, timedelta(hours=1))
 
 
+@extend_schema(
+    summary="주식 차트 데이터 (캔들)",
+    description="차트 라이브러리(ApexCharts 등)에서 사용할 캔들스틱 데이터를 반환합니다.",
+    parameters=[
+        OpenApiParameter(name='code', description='종목 코드', location=OpenApiParameter.PATH, type=str),
+        OpenApiParameter(
+            name='range', 
+            description='조회 범위 (rt: 실시간, 1w: 1주, 1m: 1달, 3m: 3달)', 
+            required=False, 
+            type=str,
+            enum=['rt', '1w', '1m', '3m']
+        )
+    ],
+    responses={200: OpenApiTypes.OBJECT}
+)
+@api_view(['GET'])
 def chart(request, code: str):
-    """
-    GET /api/chart/{code}?range=rt|1w|1m
-    - 실시간(rt): 1시간 전부터 1분 단위 캔들 (60개)
-    - 1주(1w): 최근 7일, 하루를 오전/오후로 구분 (14개 캔들)
-    - 1달(1m): 최근 30일, 1일 1개 캔들 (30개)
-    """
     range_str = request.GET.get("range", "rt")
     delta = _parse_range(range_str)
     since = timezone.now() - delta
 
     candles = []
     labels = []
-
     if range_str == "rt":
         # 실시간: 1분 단위 캔들 (1시간 전부터, 60개)
         # StockPrice 모델에서 최근 1시간 데이터 조회
@@ -395,12 +413,65 @@ def chart(request, code: str):
     except Exception as e:
         print(f"⚠️ StockDailyReport 조회 실패: {e}")
 
-    return JsonResponse({
-        "code": code,
-        "range": range_str,
-        "labels": labels,
-        "candles": candles,
-        "sentiment": [],
-        "flow": [],
-        "ai_reports": ai_reports,  # 전날 분석 리포트 데이터 추가
-    })
+    return Response({
+            "code": code,
+            "range": range_str,
+            "labels": labels,
+            "candles": candles,
+            "sentiment": [],
+            "flow": [],
+            "ai_reports": ai_reports,
+        })
+
+class StockSearchView(APIView):
+    @extend_schema(
+        summary="주식 종목 검색",
+        description="Elasticsearch를 사용하여 종목명 또는 종목코드로 검색합니다. (자동완성 지원)",
+        parameters=[
+            OpenApiParameter(
+                name='q',
+                description='검색어 (예: 삼성, 005930)',
+                required=True,
+                type=str,
+                location=OpenApiParameter.QUERY
+            )
+        ],
+        responses={200: OpenApiTypes.OBJECT}
+    )
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        
+        if not query:
+            return Response([])
+
+        es_host = os.getenv("ES_HOST", "es-container")
+        es = Elasticsearch(f"http://{es_host}:9200")
+        
+        try:
+            body = {
+                "query": {
+                    "multi_match": {
+                        "query": query,
+                        "fields": ["name", "ticker"],
+                        "type": "phrase_prefix"
+                    }
+                },
+                "size": 10
+            }
+            
+            response = es.search(index="stock_meta_idx", body=body)
+            
+            results = []
+            for hit in response['hits']['hits']:
+                src = hit['_source']
+                results.append({
+                    "ticker": src['ticker'],
+                    "name": src['name'],
+                    "market": src['market']
+                })
+                
+            return Response(results)
+            
+        except Exception as e:
+            print(f"ES Search Error: {e}")
+            return Response([])

@@ -73,6 +73,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
+    'drf_spectacular',
     
     # Third-party apps
     'corsheaders',  # CORS 설정
@@ -82,6 +84,19 @@ INSTALLED_APPS = [
     'news',
     'chat',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'MarketMood API',
+    'DESCRIPTION': '주식 데이터 분석 및 AI 챗봇 서비스 API 명세서',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    # 발표용으로 예쁘게 보이려면 아래 설정 추천
+    'COMPONENT_SPLIT_REQUEST': True,
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

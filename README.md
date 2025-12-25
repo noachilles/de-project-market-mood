@@ -107,7 +107,7 @@ THEN → 즉시 푸시 알림 전송
 
 ## 기술 문서
 ### ERD    
-![alt text](image.png)
+![alt text](src/image.png)
 
 ## 폴더 구조  
 

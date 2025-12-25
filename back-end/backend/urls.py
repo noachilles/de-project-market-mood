@@ -19,6 +19,7 @@ from django.contrib import admin
 from django.urls import path
 from stocks.views import current_price, chart
 from news.views import news_list, news_by_date, hot_keywords, chat
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 
 urlpatterns = [
@@ -29,4 +30,14 @@ urlpatterns = [
     path("api/news/by-date/", news_by_date, name="news_by_date"),
     path("api/news/hot-keywords/", hot_keywords, name="hot_keywords"),
     path("api/news/chat/", chat, name="chat"),
+
+    # ✅ Swagger (OpenAPI) 관련 URL 추가
+    # 1. 스키마 파일 (JSON) 다운로드 경로
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    
+    # 2. Swagger UI (우리가 볼 화면)
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    
+    # 3. Redoc (또 다른 디자인, 선택사항)
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
