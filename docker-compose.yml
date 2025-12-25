@@ -1,6 +1,5 @@
-version: '3.8'
-
 # [총 컨테이너 개수: 15개]
+# Note: version 필드는 최신 docker-compose에서 더 이상 필요하지 않습니다
 
 services:
   # =========================================
@@ -164,6 +163,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST_AUTH_METHOD: trust
 
   # [9] Redis: 현재가 등 초단기 데이터를 빠르게 제공하는 캐시 저장소
   redis:
@@ -252,7 +252,7 @@ services:
     build:
       context: ./front-end
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
 

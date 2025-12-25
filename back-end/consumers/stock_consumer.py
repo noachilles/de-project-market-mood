@@ -95,8 +95,43 @@ for msg in consumer:
             "timestamp": str(ts)
         }))
         
-        # 3️⃣ Postgres (주석 처리됨 - 유지)
-        # ...
+        # 3️⃣ PostgreSQL에 저장 (StockPrice 모델)
+        # 실시간 데이터를 영구 저장하여 historical data로 축적
+        try:
+            import django
+            import os
+            os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'backend.settings')
+            django.setup()
+            
+            from stocks.models import Stock, StockPrice
+            from django.utils import timezone as django_timezone
+            
+            # Stock 객체 가져오기
+            stock, _ = Stock.objects.get_or_create(
+                stock_code=code,
+                defaults={'stock_name': f'종목_{code}', 'market_type': 'KOSPI'}
+            )
+            
+            # timezone aware datetime으로 변환
+            if ts.tzinfo is None:
+                ts = django_timezone.make_aware(ts)
+            
+            # StockPrice에 저장 (1분 단위로 저장)
+            # 같은 시간대의 데이터가 있으면 업데이트, 없으면 생성
+            StockPrice.objects.update_or_create(
+                stock=stock,
+                time=ts,
+                defaults={
+                    'open': price,  # 실시간 데이터는 현재가를 open/close로 사용
+                    'high': price,
+                    'low': price,
+                    'close': price,
+                    'volume': volume,
+                }
+            )
+        except Exception as pg_error:
+            # PostgreSQL 저장 실패해도 Redis는 정상 작동하므로 로그만 출력
+            print(f"⚠️  PostgreSQL 저장 실패 (계속 진행): {pg_error}")
 
         print(f"📈 {code} | {price} | {volume}")
 

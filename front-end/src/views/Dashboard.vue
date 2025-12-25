@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { useRoute } from "vue-router";
 
 import Header from "@/components/dashboard/Header.vue";
 import WatchList from "@/components/dashboard/WatchList.vue";
@@ -15,10 +16,14 @@ const livePriceData = ref([]); // ✅ 차트에 보낼 실시간 데이터 배�
 const route = useRoute();
 const API_BASE = "http://localhost:8000";
 
-/* ================= 2. 선택 상태 (🔥 핵심) ================= */
-const selectedTicker = ref(watchItems[0].ticker);
+/* ================= 1. 관심종목 리스트 (초기 데이터) ================= */
+const watchItems = ref([
+  { ticker: "005930", name: "삼성전자", price: 0, change: 0, vol: 0 },
+  { ticker: "000660", name: "SK하이닉스", price: 0, change: 0, vol: 0 },
+]);
 
-const selectedTicker = ref(watchItems.value[0].ticker);
+/* ================= 2. 선택 상태 (🔥 핵심) ================= */
+const selectedTicker = ref(watchItems.value[0]?.ticker || "005930");
 const aiNewsList = ref([]); 
 const dailyReport = ref(null);
 const isNewsLoading = ref(false);
@@ -57,7 +62,7 @@ async function fetchStockData(ticker) {
   // 차트 및 AI 리포트 로드 (Postgres 기반)
   const loadChartAndReport = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/chart/${ticker}/?range=1w`);
+      const res = await fetch(`${API_BASE}/api/chart/${ticker}?range=1w`);
       if (!res.ok) throw new Error("Chart/Report API 에러");
       const data = await res.json();
       
@@ -116,12 +121,6 @@ async function refreshAllPrices() {
   }
 }
 
-// 종목 변경 시 실시간 데이터 초기화
-watch(selectedTicker, () => {
-  livePriceData.value = [];
-  fetchStockData(selectedTicker.value);
-}, { immediate: true });
-
 /* =========================
    3) 이벤트 핸들러 및 감시
 ========================= */
@@ -130,14 +129,17 @@ function onSelectTicker(ticker) {
   selectedTicker.value = ticker;
 }
 
-// 종목 변경 감시 -> 데이터 로드
+// 종목 변경 감시 -> 실시간 데이터 초기화 및 데이터 로드
 watch(selectedTicker, (newTicker) => {
-  if (newTicker) fetchStockData(newTicker);
+  if (newTicker) {
+    livePriceData.value = [];
+    fetchStockData(newTicker);
+  }
 }, { immediate: true });
 
-// URL 쿼리 파라미터 감시
-watch(() => route.query.code, (code) => {
-  if (code) selectedTicker.value = code;
+// URL 쿼리 파라미터 감시 (ticker 또는 code)
+watch(() => route.query.ticker || route.query.code, (ticker) => {
+  if (ticker) selectedTicker.value = ticker;
 }, { immediate: true });
 
 /* ✅ WatchList에 전달할 리포트 데이터 변환 */
@@ -152,6 +154,15 @@ const selectedReport = computed(() => {
       { label: "AI 감정 지수", value: dailyReport.value.sentiment.toFixed(2), tone: dailyReport.value.sentiment >= 0 ? "pos" : "neg" }
     ],
     todayFocus: "뉴스 모멘텀 분석 중"
+  };
+});
+
+/* ✅ NewsFeed에 전달할 뉴스 데이터 */
+const newsFeedData = computed(() => {
+  return {
+    items: aiNewsList.value,
+    isLoading: isNewsLoading.value,
+    ticker: selectedTicker.value,
   };
 });
 
@@ -192,7 +203,7 @@ onBeforeUnmount(() => clearInterval(timer));
 
       <section class="column right">
         <AiInsight :ticker="selectedTicker" />
-        <MyHolding :holding="selectedHolding" />
+        <NewsFeed :items="aiNewsList" :is-loading="isNewsLoading" :ticker="selectedTicker" />
       </section>
     </main>
   </div>

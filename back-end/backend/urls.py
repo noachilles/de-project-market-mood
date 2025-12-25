@@ -18,10 +18,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from stocks.views import current_price, chart
+from news.views import news_list, news_by_date
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/current-price/<str:code>", current_price, name="current_price"),
     path("api/chart/<str:code>", chart, name="chart"),
+    path("api/news/", news_list, name="news_list"),
+    path("api/news/by-date/", news_by_date, name="news_by_date"),
 ]

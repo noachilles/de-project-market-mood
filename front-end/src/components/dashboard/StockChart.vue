@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 <template>
   <div class="card">
     <div class="card-header chart-header">
@@ -43,134 +41,51 @@
   </div>
 </template>
 
->>>>>>> origin/develop
 <script setup>
-import { ref, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { Chart, registerables } from "chart.js";
-import "chartjs-adapter-date-fns";
+import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
+import { fetchChart } from "@/services/stocks";
+import { fetchNewsByDate } from "@/services/stocks";
 
-Chart.register(...registerables);
+// Chart.js 등록
+Chart.register(...registerables, CandlestickController, CandlestickElement);
+
+// date-fns 어댑터는 Chart.js 등록 후에 import
+import "chartjs-adapter-date-fns";
 
 const props = defineProps({
   ticker: String,
-  liveData: Array,
-  news: Array // Dashboard에서 넘겨받은 뉴스 더미
+  liveData: {
+    type: Array,
+    default: () => [],
+  },
 });
 
 const chartCanvas = ref(null);
 let chartInstance = null;
-const currentRange = ref("rt");
 
-<<<<<<< HEAD
-// 더미 캔들 데이터 생성 (Open, High, Low, Close)
-function getCandleDummy(count) {
-  const data = [];
-  const now = Date.now();
-  for (let i = count; i > 0; i--) {
-    const base = 111000 + Math.random() * 1000;
-    data.push({
-      x: new Date(now - i * 24 * 3600 * 1000),
-      o: base,
-      h: base + 300,
-      l: base - 300,
-      c: base + (Math.random() > 0.5 ? 200 : -200),
-      newsSummary: props.news[i % props.news.length].title // 호버 시 보여줄 뉴스
-    });
-  }
-  return data;
-}
-
-function initChart() {
-  const ctx = chartCanvas.value.getContext("2d");
-  chartInstance = new Chart(ctx, {
-    type: "line",
-    data: {
-      datasets: [{
-        label: "Price",
-        data: props.liveData,
-        borderColor: "#10b981",
-        backgroundColor: "rgba(16, 185, 129, 0.2)",
-        borderWidth: 2,
-        pointRadius: 4,
-        fill: true,
-        tension: 0.1,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        x: { type: 'time', time: { unit: 'minute' }, grid: { display: false }, ticks: { color: '#9ca3af' } },
-        y: { 
-          beginAtZero: false, 
-          ticks: { stepSize: 500, color: '#9ca3af' }, 
-          grid: { color: 'rgba(255,255,255,0.05)' } 
-        }
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: '#1f2937',
-          titleColor: '#60a5fa',
-          bodyColor: '#fff',
-          padding: 12,
-          cornerRadius: 8,
-          callbacks: {
-            label: (ctx) => `가격: ${ctx.raw.y?.toLocaleString() || ctx.raw.c?.toLocaleString()}원`,
-            footer: (items) => {
-              const raw = items[0].raw;
-              return raw.newsSummary ? `\n📰 뉴스 요약:\n${raw.newsSummary}` : "";
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
-function updateChart() {
-  if (!chartInstance) return;
-  
-  if (currentRange.value === "rt") {
-    chartInstance.data.datasets[0].type = "line";
-    chartInstance.data.datasets[0].data = props.liveData;
-    chartInstance.data.datasets[0].pointRadius = 4;
-    const latest = props.liveData.length > 0 ? props.liveData[props.liveData.length-1].y : 111200;
-    chartInstance.options.scales.y.min = latest - 1000;
-    chartInstance.options.scales.y.max = latest + 1000;
-  } else {
-    // 캔들 모사 (Bar 형태 활용)
-    const dummy = getCandleDummy(currentRange.value === '1w' ? 7 : 30);
-    chartInstance.data.datasets[0].type = "bar"; // 캔들 느낌을 위해 Bar로 변경 가능
-    chartInstance.data.datasets[0].data = dummy.map(d => ({ x: d.x, y: d.c, newsSummary: d.newsSummary }));
-    chartInstance.options.scales.y.min = undefined;
-    chartInstance.options.scales.y.max = undefined;
-  }
-  chartInstance.update('none');
-=======
-const range = ref("6m");
+// 캔들 차트용 범위 (실시간, 1주, 1달, 3달)
+const range = ref("rt");
 const ranges = [
   { value: "rt", label: "실시간" },
-  { value: "1d", label: "1일" },
   { value: "1w", label: "1주" },
   { value: "1m", label: "1달" },
   { value: "3m", label: "3달" },
-  { value: "6m", label: "6달" },
-  { value: "1y", label: "1년" },
 ];
+
+// 캔들 데이터 및 뉴스 캐시
+const candleData = ref([]);
+const newsCache = ref({}); // { "2024-12-25": [{title: "...", ...}] }
 
 const labelRange = computed(() => {
   const map = {
-    rt: "실시간",
-    "1d": "1일",
-    "1w": "1주",
-    "1m": "1달",
-    "3m": "3달",
-    "6m": "6달",
-    "1y": "1년",
+    rt: "실시간 (1분 캔들)",
+    "1w": "1주 (오전/오후 캔들)",
+    "1m": "1달 (일봉 캔들)",
+    "3m": "3달 (일봉 캔들)",
   };
-  return map[range.value] ?? "1년";
+  return map[range.value] ?? "실시간";
 });
 
 const RANGE_SPEC = {
@@ -214,17 +129,61 @@ function genSeries({ basePrice, baseSent, baseFlow, points, stepMs }) {
   return out;
 }
 
-const series = computed(() => {
-  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
-  const base = baseByTicker[ticker.value] ?? baseByTicker["005930"];
-  return genSeries({
-    basePrice: base.price,
-    baseSent: base.sentiment,
-    baseFlow: base.flow,
-    points: spec.points,
-    stepMs: spec.stepMs,
-  });
-});
+// 캔들 데이터 로드 및 뉴스 미리 로드
+async function loadCandleData() {
+  if (!props.ticker) {
+    candleData.value = [];
+    return;
+  }
+
+  try {
+    const data = await fetchChart(props.ticker, range.value);
+    candleData.value = (data.candles || []).map((candle) => ({
+      x: new Date(candle.x).getTime(),
+      o: candle.o,
+      h: candle.h,
+      l: candle.l,
+      c: candle.c,
+      v: candle.v,
+      date: candle.date || candle.x.split('T')[0], // 날짜 문자열 (YYYY-MM-DD)
+    }));
+    
+    // 뉴스 미리 로드 (비동기, 백그라운드) - 실시간 제외
+    if (range.value !== "rt") {
+      const uniqueDates = [...new Set(candleData.value.map(c => c.date))];
+      uniqueDates.forEach(dateStr => {
+        if (!newsCache.value[dateStr]) {
+          loadNewsForDate(dateStr).catch(err => {
+            console.warn(`뉴스 미리 로드 실패 (${dateStr}):`, err);
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("캔들 데이터 로드 실패:", error);
+    candleData.value = [];
+  }
+}
+
+// 특정 날짜의 뉴스 로드 (캐시 사용)
+async function loadNewsForDate(dateStr) {
+  if (!props.ticker || !dateStr) return [];
+
+  // 캐시 확인
+  if (newsCache.value[dateStr]) {
+    return newsCache.value[dateStr];
+  }
+
+  try {
+    const newsData = await fetchNewsByDate(props.ticker, dateStr);
+    const items = newsData.items || [];
+    newsCache.value[dateStr] = items;
+    return items;
+  } catch (error) {
+    console.error(`뉴스 로드 실패 (${dateStr}):`, error);
+    return [];
+  }
+}
 
 /* ✅ 한 프레임 뒤에 실행(레이아웃 0 높이 방지) */
 function raf() {
@@ -244,65 +203,122 @@ async function buildChartSafe() {
   }
 
   const ctx = chartCanvas.value.getContext("2d");
-  const spec = RANGE_SPEC[range.value] ?? RANGE_SPEC["6m"];
-  const d = series.value;
 
   try {
     chartInstance?.destroy();
+
+    // 모든 범위에서 캔들 차트 사용
+    if (candleData.value.length === 0) {
+      await loadCandleData();
+    }
+
+    const candles = candleData.value.map((c) => ({
+      x: c.x,
+      o: c.o,
+      h: c.h,
+      l: c.l,
+      c: c.c,
+      date: c.date, // 뉴스 조회용
+    }));
+
+    // 시간 단위 설정
+    let timeUnit = "minute";
+    if (range.value === "1w" || range.value === "1m" || range.value === "3m") {
+      timeUnit = "day";
+    }
+
     chartInstance = new Chart(ctx, {
-      type: "bar",
+      type: "candlestick",
       data: {
-        datasets: [
-          {
-            type: "line",
-            label: "Price",
-            data: d.map((r) => ({ x: r.x, y: r.price })),
-            yAxisID: "yPrice",
-            borderColor: "#60a5fa",
-            backgroundColor: "rgba(96,165,250,0.18)",
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.25,
+        datasets: [{
+          label: "OHLC",
+          data: candles,
+          // 주식 시장 스타일: 상승(초록), 하락(빨강)
+          color: {
+            up: "#22c55e",      // 상승 캔들 (밝은 초록)
+            down: "#ef4444",    // 하락 캔들 (밝은 빨강)
+            unchanged: "#9ca3af", // 동일 (회색)
           },
-          {
-            type: "line",
-            label: "Sentiment",
-            data: d.map((r) => ({ x: r.x, y: r.sentiment })),
-            yAxisID: "ySentiment",
-            borderColor: "#fb923c",
-            borderDash: [4, 3],
-            borderWidth: 2,
-            pointRadius: 0,
-            tension: 0.25,
+          // 캔들 스타일 설정
+          borderColor: {
+            up: "#16a34a",      // 상승 테두리 (진한 초록)
+            down: "#dc2626",    // 하락 테두리 (진한 빨강)
+            unchanged: "#6b7280", // 동일 테두리
           },
-          {
-            type: "bar",
-            label: "Flow",
-            data: d.map((r) => ({ x: r.x, y: r.flow })),
-            yAxisID: "yFlow",
-            backgroundColor: (ctx) => {
-              const v = ctx.raw?.y ?? 0;
-              return v >= 0 ? "rgba(74,222,128,0.45)" : "rgba(248,113,113,0.45)";
-            },
-            borderRadius: 4,
-            barPercentage: 0.7,
-            categoryPercentage: 0.9,
-          },
-        ],
+          borderWidth: 1,
+        }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
+        interaction: { 
+          mode: "index", 
+          intersect: false,
+          axis: "x",
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: "rgba(15,23,42,0.96)",
+            padding: 12,
+            borderColor: "rgba(148,163,184,0.3)",
+            borderWidth: 1,
+            titleColor: "#f9fafb",
+            bodyColor: "#e5e7eb",
             callbacks: {
-              footer: (items) => {
-                const idx = items?.[0]?.dataIndex ?? 0;
-                const msg = d?.[idx]?.news ?? "뉴스 요약 데이터가 없습니다.";
-                return "뉴스 요약: " + msg;
+              title: (items) => {
+                if (items.length === 0) return "";
+                const point = items[0].raw;
+                const date = new Date(point.x);
+                if (range.value === "rt") {
+                  return date.toLocaleString("ko-KR", { 
+                    month: "short", 
+                    day: "numeric", 
+                    hour: "2-digit", 
+                    minute: "2-digit" 
+                  });
+                }
+                return date.toLocaleDateString("ko-KR", { 
+                  year: "numeric", 
+                  month: "long", 
+                  day: "numeric" 
+                });
+              },
+              label: (context) => {
+                const point = context.raw;
+                const change = point.c - point.o;
+                const changePercent = ((change / point.o) * 100).toFixed(2);
+                const changeColor = change >= 0 ? "#22c55e" : "#ef4444";
+                const changeSign = change >= 0 ? "+" : "";
+                
+                return [
+                  `시가: ${point.o?.toLocaleString("ko-KR")}원`,
+                  `고가: ${point.h?.toLocaleString("ko-KR")}원`,
+                  `저가: ${point.l?.toLocaleString("ko-KR")}원`,
+                  `종가: ${point.c?.toLocaleString("ko-KR")}원`,
+                  `변동: ${changeSign}${change.toLocaleString("ko-KR")}원 (${changeSign}${changePercent}%)`,
+                ];
+              },
+              afterBody: (items) => {
+                if (items.length === 0 || range.value === "rt") return [];
+                const point = items[0].raw;
+                const dateStr = point.date;
+                if (!dateStr) return [];
+
+                // 캐시에서 뉴스 가져오기 (동기)
+                const newsItems = newsCache.value[dateStr] || [];
+                
+                if (newsItems.length === 0) {
+                  // 캐시에 없으면 비동기로 로드 시도 (다음 호버 시 표시됨)
+                  loadNewsForDate(dateStr).catch(() => {});
+                  return ["\n📰 당일 뉴스 로딩 중..."];
+                }
+
+                // 당일 기사 리포트 표시
+                const newsTitles = newsItems.slice(0, 3).map((item, idx) => 
+                  `${idx + 1}. ${item.title || '뉴스 제목 없음'}`
+                );
+                return ["\n📰 당일 주요 뉴스:", ...newsTitles];
               },
             },
           },
@@ -310,24 +326,41 @@ async function buildChartSafe() {
         scales: {
           x: {
             type: "time",
-            time: { unit: spec.unit },
-            ticks: { color: "#9ca3af", font: { size: 11 }, maxTicksLimit: 8 },
-            grid: { display: false },
+            time: {
+              unit: timeUnit,
+              displayFormats: {
+                minute: "HH:mm",
+                hour: "MM/dd HH:mm",
+                day: "MM/dd",
+                week: "MM/dd",
+                month: "yyyy/MM",
+              },
+            },
+            ticks: { 
+              color: "#9ca3af", 
+              font: { size: 11 }, 
+              maxTicksLimit: range.value === "rt" ? 12 : 10,
+              maxRotation: 0,
+            },
+            grid: { 
+              display: true,
+              color: "rgba(55,65,81,0.3)",
+              drawBorder: false,
+            },
           },
-          yPrice: {
-            position: "left",
-            ticks: { color: "#9ca3af" },
-            grid: { color: "rgba(55,65,81,0.55)" },
-          },
-          ySentiment: {
+          y: {
             position: "right",
-            display: false,
-            suggestedMin: 0,
-            suggestedMax: 100,
-          },
-          yFlow: {
-            position: "right",
-            display: false,
+            ticks: { 
+              color: "#9ca3af",
+              font: { size: 11 },
+              callback: function(value) {
+                return value.toLocaleString("ko-KR") + "원";
+              },
+            },
+            grid: { 
+              color: "rgba(55,65,81,0.3)",
+              drawBorder: false,
+            },
           },
         },
       },
@@ -337,7 +370,15 @@ async function buildChartSafe() {
   }
 }
 
-watch([ticker, range], () => {
+function changeRange(v) {
+  range.value = v;
+  candleData.value = []; // 범위 변경 시 데이터 초기화
+  newsCache.value = {}; // 뉴스 캐시 초기화
+}
+
+// ticker나 range 변경 시 캔들 데이터 로드
+watch([() => props.ticker, range], async () => {
+  await loadCandleData();
   buildChartSafe();
 });
 
@@ -348,48 +389,59 @@ onMounted(() => {
 onBeforeUnmount(() => {
   chartInstance?.destroy();
 });
-
-function changeRange(v) {
-  range.value = v;
->>>>>>> origin/develop
-}
-
-watch(() => props.liveData, updateChart, { deep: true });
-
-onMounted(initChart);
 </script>
 
-<template>
-  <div class="chart-card">
-    <div class="chart-header">
-      <h3 class="title">Market Flow</h3>
-      <div class="range-selector">
-        <button v-for="r in ['rt', '1w', '1m', '3m']" :key="r" 
-                @click="currentRange = r; updateChart()" 
-                :class="{ active: currentRange === r }">
-          {{ r.toUpperCase() }}
-        </button>
-      </div>
-    </div>
-    <div class="canvas-container">
-      <canvas ref="chartCanvas"></canvas>
-    </div>
-  </div>
-</template>
-
 <style scoped>
-.chart-card { background: rgba(15, 23, 42, 0.9); border: 1px solid #1f2937; border-radius: 16px; padding: 24px; height: 100%; }
-.chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-.title { color: #f3f4f6; font-size: 1.1rem; margin: 0; }
-.range-selector { display: flex; background: #1f2937; padding: 4px; border-radius: 8px; }
-button { 
-  background: transparent; color: #9ca3af; border: none; padding: 6px 12px; 
-  border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.3s;
+.chart-wrapper {
+  height: 400px;
+  position: relative;
 }
-<<<<<<< HEAD
-button.active { background: #3b82f6; color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
-.canvas-container { height: 320px; }
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 12px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.legend-price {
+  background: #60a5fa;
+}
+.legend-sentiment {
+  background: #fb923c;
+}
+.legend-flow {
+  background: #4ade80;
+}
+.tooltip-note {
+  text-align: center;
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 8px;
+}
+.range-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ca3af;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+.range-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.range-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
 </style>
-=======
-</style>
->>>>>>> origin/develop
