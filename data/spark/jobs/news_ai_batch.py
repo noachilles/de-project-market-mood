@@ -1,10 +1,14 @@
 # /app/jobs/news_ai_batch.py
 import os
+import sys
 import json
 import time
+from datetime import datetime
 from typing import Iterator, List, Dict, Any, Tuple
 
 import requests
+import psycopg2
+from dotenv import load_dotenv
 from pyspark.sql import SparkSession, Row
 from pyspark.sql.functions import col, from_utc_timestamp, to_timestamp
 
@@ -96,41 +100,72 @@ def save_stock_daily_report(ticker: str, summary: str, score: float, target_date
 def _flush_batch(payload_rows: List[Row], target_date: str) -> int:
     SAMSUNG_CODE = "005930"  # 테스트용 타겟 코드
     samsung_news_contents = []
-    rows_as_dict = [r.asDict() for r in payload_rows]
+    
+    try:
+        rows_as_dict = [r.asDict() for r in payload_rows]
+    except Exception as e:
+        print(f"⚠️ Row 변환 실패: {e}")
+        return 0
 
     for r in rows_as_dict:
-        t = r.get("title", "")
-        c = (r.get("content") or r.get("body") or "")[:500]
-        codes = r.get("related_stocks") or r.get("stock_codes") or []
-        
-        # 삼성전자 코드가 포함된 뉴스만 수집
-        if SAMSUNG_CODE in codes:
-            samsung_news_contents.append(f"제목: {t}\n내용: {c}")
+        try:
+            t = r.get("title", "") or ""
+            c = (r.get("content") or r.get("body") or "")[:500]
+            
+            # related_stocks가 문자열(JSON)인 경우 파싱
+            codes_raw = r.get("related_stocks") or r.get("stock_codes") or []
+            if isinstance(codes_raw, str):
+                try:
+                    codes = json.loads(codes_raw) if codes_raw else []
+                except:
+                    codes = [codes_raw] if codes_raw else []
+            elif isinstance(codes_raw, list):
+                codes = codes_raw
+            else:
+                codes = []
+            
+            # 삼성전자 코드가 포함된 뉴스만 수집
+            if SAMSUNG_CODE in codes or SAMSUNG_CODE in str(codes):
+                samsung_news_contents.append(f"제목: {t}\n내용: {c}")
+        except Exception as e:
+            print(f"⚠️ 뉴스 항목 처리 중 오류 (건너뜀): {e}")
+            continue
 
     if not samsung_news_contents:
         return 0
 
-    # 1. 삼성전자 관련 뉴스들을 하나로 합침 (최대 10개)
-    combined_text = "\n---\n".join(samsung_news_contents[:10])
-    
-    # 2. AI 요약 및 감성 분석 수행
-    print(f"🤖 삼성전자 관련 뉴스 {len(samsung_news_contents)}건 분석 중...")
-    summary, score = openai_summarize_stock_total(SAMSUNG_CODE, combined_text)
-    
-    # 3. DB 저장
-    if summary:
-        save_stock_daily_report(SAMSUNG_CODE, summary, score, target_date)
-        print(f"✨ [SAMSUNG] {target_date} 리포트 저장 완료!")
-        return 1
-    
-    return 0
+    try:
+        # 1. 삼성전자 관련 뉴스들을 하나로 합침 (최대 10개)
+        combined_text = "\n---\n".join(samsung_news_contents[:10])
+        
+        # 2. AI 요약 및 감성 분석 수행
+        print(f"🤖 삼성전자 관련 뉴스 {len(samsung_news_contents)}건 분석 중...")
+        summary, score = openai_summarize_stock_total(SAMSUNG_CODE, combined_text)
+        
+        # 3. DB 저장
+        if summary:
+            save_stock_daily_report(SAMSUNG_CODE, summary, score, target_date)
+            print(f"✨ [SAMSUNG] {target_date} 리포트 저장 완료!")
+            return 1
+        else:
+            print(f"⚠️ AI 요약 생성 실패 (빈 결과)")
+            return 0
+    except Exception as e:
+        print(f"❌ 배치 처리 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
 
 def process_partition(rows: Iterator[Row], target_date: str) -> Iterator[int]:
     # 삼성전자는 데이터 양이 적을 수 있으므로 파티션 전체를 모아서 한 번에 처리
-    batch = list(rows)
-    if batch:
-        yield _flush_batch(batch, target_date)
-    else:
+    try:
+        batch = list(rows)
+        if batch:
+            yield _flush_batch(batch, target_date)
+        else:
+            yield 0
+    except Exception as e:
+        print(f"⚠️ 파티션 처리 중 오류 (건너뜀): {e}")
         yield 0
 
 def main():

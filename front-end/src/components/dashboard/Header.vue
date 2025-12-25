@@ -43,17 +43,6 @@
 
 <script setup>
 const props = defineProps({
-<<<<<<< HEAD
-  stock: { type: Object, default: () => ({ price: 0, change: 0, vol: 0 }) }
-});
-
-const formatKRW = (val) => new Intl.NumberFormat('ko-KR').format(val || 0) + '원';
-const formatChange = (val) => {
-  const num = Number(val || 0);
-  return `${num > 0 ? '+' : ''}${num.toFixed(2)}%`;
-};
-const toneClass = (val) => (Number(val) > 0 ? 'up' : Number(val) < 0 ? 'down' : '');
-=======
   stock: {
     type: Object,
     default: null, // ✅ required 제거 + 안전 처리
@@ -70,7 +59,6 @@ function formatChange(v) {
 function toneClass(v) {
   return Number(v || 0) >= 0 ? "pos" : "neg";
 }
->>>>>>> origin/develop
 </script>
 
 <style scoped>

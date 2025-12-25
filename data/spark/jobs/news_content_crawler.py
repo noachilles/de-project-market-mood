@@ -32,13 +32,8 @@ def fetch_content(url):
 # 2. Main Spark Job
 # ---------------------------------------------------------
 def main():
-<<<<<<< HEAD
-    # Airflow에서 전달하는 기준 날짜 (예: 20251223)
-    target_date = sys.argv[1] if len(sys.argv) > 1 else datetime.now().strftime("%Y-%m-%d")
-    
-=======
-    # Spark 세션 생성 (ES 커넥터 필요 시 config 추가)
->>>>>>> parent of 79a31d5 (Merge branch 'MM-32' of https://lab.ssafy.com/dtmg1ejk/de-project into MM-32)
+    # Spark 세션 생성 (ES 커넥터 JAR은 이미 Dockerfile에서 다운로드됨)
+    # --jars 옵션으로 직접 지정하거나, SparkSession에서 설정
     spark = SparkSession.builder \
         .appName("NewsContentCrawler") \
         .getOrCreate()
@@ -63,19 +58,43 @@ def main():
     result_df.select("title", "content").show(3, truncate=True)
 
     try:
-        result_df.write \
-            .format("org.elasticsearch.spark.sql") \
-            .option("es.nodes", "elasticsearch") \
-            .option("es.port", "9200") \
-            .option("es.resource", "news-enriched") \
-            .option("es.nodes.wan.only", "true") \
-            .mode("append") \
-            .save()
+        # 에러가 발생한 행은 건너뛰고 나머지만 저장
+        # content가 "Error:"로 시작하는 행 필터링
+        valid_df = result_df.filter(~col("content").startswith("Error:"))
+        
+        print(f"=== 크롤링 성공: {valid_df.count()}건 / 전체: {result_df.count()}건 ===")
+        
+        if valid_df.count() > 0:
+            # 필요한 컬럼만 선택하여 저장 (Elasticsearch 매핑과 일치)
+            es_df = valid_df.select(
+                col("title"),
+                col("link"),
+                col("content").alias("content_summary"),  # content를 content_summary로 매핑
+                col("source"),
+                col("published_at"),
+                col("related_stocks").alias("stock_codes")  # related_stocks를 stock_codes로 매핑
+            )
             
-        print("=== [Success] 저장 완료! 'news-enriched' 인덱스를 확인하세요. ===")
+            es_df.write \
+                .format("org.elasticsearch.spark.sql") \
+                .option("es.nodes", "elasticsearch") \
+                .option("es.port", "9200") \
+                .option("es.resource", "news-enriched/_doc") \
+                .option("es.nodes.wan.only", "true") \
+                .option("es.mapping.id", "link") \
+                .option("es.write.operation", "upsert") \
+                .option("es.mapping.date.rich", "false") \
+                .mode("append") \
+                .save()
+                
+            print("=== [Success] 저장 완료! 'news-enriched' 인덱스를 확인하세요. ===")
+        else:
+            print("=== [Warning] 저장할 유효한 데이터가 없습니다. ===")
         
     except Exception as e:
         print(f"=== [Error] 저장 실패: {e} ===")
+        import traceback
+        traceback.print_exc()
 
     spark.stop()
 
