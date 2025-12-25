@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI 기반 주식 인사이트 대시보드</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --bg-dark: #111827;
+      --card-bg: #ffffff;
+      --border-subtle: #e5e7eb;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --danger: #ef4444;
+      --success: #16a34a;
+      --text-main: #111827;
+      --text-sub: #6b7280;
+      --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.12);
+      --radius-lg: 18px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      background: radial-gradient(circle at top left, #1f2937 0, #020617 40%, #020617 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 32px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .dashboard-shell {
+      width: 100%;
+      max-width: 1360px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.96));
+      border-radius: 26px;
+      padding: 24px 24px 28px;
+      box-shadow: var(--shadow-soft);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      color: #f9fafb;
+    }
+
+    /* 상단 종목 헤더 */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-radius: 18px;
+      background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.24), transparent 55%) #020617;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ticker-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-weight: 600;
+    }
+
+    .ticker-row .symbol {
+      font-size: 18px;
+    }
+
+    .ticker-row .code {
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .price-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+    }
+
+    .price-main {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .change-pill {
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background-color: rgba(22, 163, 74, 0.15);
+      color: #bbf7d0;
+    }
+
+    .change-pill.negative {
+      background-color: rgba(239, 68, 68, 0.16);
+      color: #fecaca;
+    }
+
+    .volume {
+      font-size: 13px;
+      color: #cbd5f5;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pill-tag {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      color: #e5e7eb;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .primary-btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: none;
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      color: #f9fafb;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .primary-btn span.icon {
+      font-size: 14px;
+    }
+
+    /* 메인 레이아웃 */
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1.6fr) 290px;
+      gap: 16px;
+      height: 640px;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      background: rgba(15, 23, 42, 0.97);
+      border-radius: var(--radius-lg);
+      padding: 14px 14px 16px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      box-shadow: 0 12px 35px rgba(15, 23, 42, 0.55);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .card-sub {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(148, 163, 184, 0.7), transparent);
+      margin: 8px 0 10px;
+    }
+
+    /* 좌측 패널 – 관심종목 리스트 */
+    .watchlist {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .watch-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(55, 65, 81, 0.75);
+      cursor: pointer;
+    }
+
+    .watch-item.active {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.7);
+    }
+
+    .watch-symbol {
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+
+    .watch-price {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
+    .watch-change {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .watch-change.pos {
+      color: #4ade80;
+    }
+
+    .watch-change.neg {
+      color: #fca5a5;
+    }
+
+    /* 텍스트 리포트 */
+    .report-text {
+      font-size: 12px;
+      color: #cbd5f5;
+      line-height: 1.5;
+    }
+
+    .report-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      background: rgba(37, 99, 235, 0.1);
+      color: #bfdbfe;
+      margin-bottom: 6px;
+    }
+
+    .stat-highlight {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .stat-highlight span {
+      color: #4ade80;
+    }
+
+    /* 중앙 패널 – 기간 버튼 + 차트 */
+    .range-tabs {
+      display: inline-flex;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 999px;
+      padding: 3px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      gap: 3px;
+      margin-bottom: 10px;
+    }
+
+    .range-btn {
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      font-size: 11px;
+      padding: 4px 9px;
+      color: #cbd5f5;
+      cursor: pointer;
+    }
+
+    .range-btn.active {
+      background: linear-gradient(135deg, #2563eb, #4f46e5);
+      color: #f9fafb;
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 260px;
+      margin-top: 4px;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 10px;
+      margin-top: 6px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      margin-right: 3px;
+      display: inline-block;
+    }
+
+    .legend-price { background: #60a5fa; }
+    .legend-sentiment { background: #f97316; }
+    .legend-flow { background: #4ade80; }
+
+    .tooltip-note {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+
+    /* 뉴스 피드 */
+    .news-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .news-item {
+      padding: 7px 9px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(55, 65, 81, 0.85);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 12px;
+    }
+
+    .news-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .news-title {
+      font-weight: 500;
+      color: #e5e7eb;
+    }
+
+    .sentiment-pill {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    .sentiment-pos {
+      background: #bbf7d0;
+    }
+
+    .sentiment-neutral {
+      background: #e5e7eb;
+    }
+
+    .sentiment-neg {
+      background: #fecaca;
+    }
+
+    .news-meta {
+      font-size: 11px;
+      color: #9ca3af;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .tweet-snippet {
+      font-size: 11px;
+      color: #cbd5f5;
+      margin-top: 2px;
+    }
+
+    /* 우측 패널 – 상태 바, 게이지, 보유 정보 */
+    .status-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 12px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .status-label {
+      color: #cbd5f5;
+    }
+
+    .status-bar-track {
+      flex: 1;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      overflow: hidden;
+      border: 1px solid rgba(55, 65, 81, 0.9);
+      margin: 0 6px;
+    }
+
+    .status-bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #22c55e, #22c55e);
+    }
+
+    .status-bar-fill.warn {
+      background: linear-gradient(90deg, #f97316, #f59e0b);
+    }
+
+    /* 단순 선형 적정 가치 그래프 느낌 */
+    .micro-chart {
+      margin-top: 8px;
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px dashed rgba(55, 65, 81, 0.9);
+      font-size: 11px;
+      color: #cbd5f5;
+    }
+
+    .micro-chart strong {
+      color: #e5e7eb;
+    }
+
+    /* 게이지 */
+    .gauge {
+      margin-top: 8px;
+      text-align: center;
+      font-size: 11px;
+      color: #cbd5f5;
+    }
+
+    .gauge-arc {
+      width: 120px;
+      height: 60px;
+      border-radius: 120px 120px 0 0;
+      border: 8px solid rgba(55, 65, 81, 0.9);
+      border-bottom: none;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gauge-fill {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 8px solid transparent;
+      border-top-color: #22c55e;
+      border-left-color: #22c55e;
+      transform-origin: center bottom;
+      transform: rotate(20deg);
+    }
+
+    .gauge-pointer {
+      position: absolute;
+      bottom: -2px;
+      left: 50%;
+      width: 2px;
+      height: 46px;
+      background: #f9fafb;
+      transform-origin: bottom center;
+      transform: rotate(15deg);
+    }
+
+    .gauge-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 6px;
+    }
+
+    .protips {
+      margin-top: 8px;
+      padding: 7px 9px;
+      border-radius: 10px;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.28), transparent 60%);
+      border: 1px solid rgba(59, 130, 246, 0.8);
+      font-size: 11px;
+      color: #e0f2fe;
+    }
+
+    .protips-title {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    /* 보유 정보 */
+    .holding-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .holding-item {
+      padding: 6px 8px;
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(55, 65, 81, 0.9);
+    }
+
+    .holding-label {
+      font-size: 11px;
+      color: #9ca3af;
+      margin-bottom: 2px;
+    }
+
+    .holding-value {
+      font-weight: 600;
+      color: #e5e7eb;
+    }
+
+    .holding-value.pos {
+      color: #4ade80;
+    }
+
+    .holding-value.neg {
+      color: #fecaca;
+    }
+
+    @media (max-width: 1120px) {
+      body {
+        padding: 16px;
+      }
+
+      .layout {
+        grid-template-columns: 260px minmax(0, 1.5fr);
+        grid-template-rows: auto auto;
+      }
+
+      .column.right {
+        grid-column: span 2;
+        flex-direction: row;
+      }
+
+      .column.right .card {
+        flex: 1;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .layout {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+      }
+
+      .column.right {
+        flex-direction: column;
+      }
+
+      .dashboard-shell {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-shell">
+    <!-- 상단 종목 요약 -->
+    <header class="header">
+      <div class="header-left">
+        <div class="ticker-row">
+          <div class="symbol">삼성전자</div>
+          <div class="code">(005930)</div>
+        </div>
+        <div class="price-row">
+          <div class="price-main">85,300원</div>
+          <div class="change-pill">
+            <span>▲</span>
+            <span>+2.55%</span>
+          </div>
+          <div class="volume">거래량: 1,250,000주</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="pill-tag">
+          <span>AI 기반 종목 인사이트</span>
+        </div>
+        <button class="primary-btn">
+          <span class="icon">✨</span>
+          <span>AI Insights 보기</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 메인 3단 레이아웃 -->
+    <main class="layout">
+      <!-- 좌측 패널 -->
+      <section class="column left">
+        <!-- 내 관심종목 리스트 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">내 관심종목 리스트</div>
+            <div class="card-sub">실시간 변화율 기준</div>
+          </div>
+          <div class="divider"></div>
+          <div class="watchlist">
+            <div class="watch-item active">
+              <div>
+                <div class="watch-symbol">삼성전자</div>
+                <div class="watch-price">85,300원</div>
+              </div>
+              <div class="watch-change pos">+2.55%</div>
+            </div>
+            <div class="watch-item">
+              <div>
+                <div class="watch-symbol">SK하이닉스</div>
+                <div class="watch-price">153,000원</div>
+              </div>
+              <div class="watch-change pos">+1.24%</div>
+            </div>
+            <div class="watch-item">
+              <div>
+                <div class="watch-symbol">NAVER</div>
+                <div class="watch-price">198,500원</div>
+              </div>
+              <div class="watch-change neg">-0.82%</div>
+            </div>
+            <div class="watch-item">
+              <div>
+                <div class="watch-symbol">카카오</div>
+                <div class="watch-price">54,300원</div>
+              </div>
+              <div class="watch-change pos">+3.10%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 분석 리포트 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">AI 분석 리포트 (전날)</div>
+          </div>
+          <div class="divider"></div>
+          <div class="report-text">
+            <div class="report-tag">
+              <span>📊</span>
+              <span>선행 지표 검증</span>
+            </div>
+            <p>
+              지난 1년간 뉴스·수급·주가 데이터를 기반으로,<br />
+              <strong>“AI / 반도체”</strong> 토픽의 긍정 뉴스는
+              평균 <strong>10분 후 수익률 +0.8%</strong>와 높은 상관관계를 보였습니다.
+            </p>
+            <p style="margin-top:6px;">
+              반대로, 주가 급등 후 뒤늦게 보도된 뉴스는
+              선행력이 거의 없는 것으로 분석되었습니다.
+            </p>
+            <div class="stat-highlight">
+              오늘의 핵심: <span>“AI 서버 투자 확대”</span> 관련 헤드라인 주의 깊게 보기
+            </div>
+          </div>
+        </div>
+
+        <!-- 개인화 리포트 공간 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">개인화 토론트 공항</div>
+            <div class="card-sub">종목과 무관한 나만의 리포트</div>
+          </div>
+          <div class="divider"></div>
+          <div class="report-text">
+            <p>
+              지난 3개월 동안, 희수님의 전략은
+              <strong>“뉴스 + 수급 기반 단기 스윙”</strong>에 가장 높은 승률을 보였습니다.
+            </p>
+            <p style="margin-top:4px;">
+              <strong>손절 기준 3%</strong>를 유지했을 때
+              MDD가 크게 감소했고, 평균 수익률은
+              큰 변화 없이 안정적으로 유지되었습니다.
+            </p>
+            <div class="stat-highlight">
+              누적 실현 손익: <span>+1,500,000원 (115.8%)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 중앙 메인 패널 -->
+      <section class="column center">
+        <!-- 차트 카드 -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Real-time Stock (1년)</div>
+              <div class="card-sub">Price · Sentiment · Flow 통합</div>
+            </div>
+            <div class="range-tabs" id="rangeTabs">
+              <button class="range-btn" data-range="1d">1일</button>
+              <button class="range-btn" data-range="1w">1주</button>
+              <button class="range-btn" data-range="1m">1달</button>
+              <button class="range-btn" data-range="3m">3달</button>
+              <button class="range-btn" data-range="6m">6달</button>
+              <button class="range-btn active" data-range="1y">1년</button>
+              <button class="range-btn" data-range="5y">5년</button>
+              <button class="range-btn" data-range="all">전체</button>
+            </div>
+          </div>
+          <div class="divider"></div>
+          <div class="chart-wrapper">
+            <canvas id="stockChart"></canvas>
+          </div>
+          <div class="chart-legend">
+            <span><span class="legend-dot legend-price"></span>Price (캔들/라인)</span>
+            <span><span class="legend-dot legend-sentiment"></span>Sentiment (뉴스 감정)</span>
+            <span><span class="legend-dot legend-flow"></span>Flow (외국인·기관 수급)</span>
+          </div>
+          <p class="tooltip-note">
+            차트 위 시점을 마우스로 올리면, 해당 시점의
+            <strong>핵심 뉴스 요약</strong>이 툴팁으로 표시됩니다.
+          </p>
+        </div>
+
+        <!-- 뉴스 피드 카드 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">실시간 뉴스 피드 (내 관심종목)</div>
+            <div class="card-sub">감정 색상 + 트윗 요약</div>
+          </div>
+          <div class="divider"></div>
+          <div class="news-list">
+            <article class="news-item">
+              <div class="news-header">
+                <div class="news-title">
+                  삼성전자, 북미 데이터센터향 HBM 공급 확대
+                </div>
+                <span class="sentiment-pill sentiment-pos">긍정</span>
+              </div>
+              <div class="news-meta">
+                <span>10분 전 · 이데일리</span>
+                <span>#AI #HBM</span>
+              </div>
+              <div class="tweet-snippet">
+                💬 “Big cloud players doubling down on Korean HBM suppliers.
+                Mood: still bullish.”
+              </div>
+            </article>
+
+            <article class="news-item">
+              <div class="news-header">
+                <div class="news-title">
+                  반도체 업황 둔화 우려… 단기 변동성 확대 가능성
+                </div>
+                <span class="sentiment-pill sentiment-neg">부정</span>
+              </div>
+              <div class="news-meta">
+                <span>35분 전 · 한국경제</span>
+                <span>#cycle #macro</span>
+              </div>
+              <div class="tweet-snippet">
+                💬 “Profit taking intensifies after recent AI rally. Watching
+                foreign flows closely.”
+              </div>
+            </article>
+
+            <article class="news-item">
+              <div class="news-header">
+                <div class="news-title">
+                  외국인, 반도체·2차전지 중심으로 매수 전환
+                </div>
+                <span class="sentiment-pill sentiment-neutral">중립</span>
+              </div>
+              <div class="news-meta">
+                <span>1시간 전 · 머니투데이</span>
+                <span>#flow #ETF</span>
+              </div>
+              <div class="tweet-snippet">
+                💬 “Smart money creeping back into KR chip names. Accumulation
+                phase or dead-cat bounce?”
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 우측 패널 -->
+      <section class="column right">
+        <!-- AI 감정 및 예측 서비스 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">AI 감정 및 예측 서비스</div>
+          </div>
+          <div class="divider"></div>
+          <div class="status-bars">
+            <div class="status-row">
+              <span class="status-label">회사의 상태 · 성장</span>
+              <span style="font-size:11px;">70%</span>
+            </div>
+            <div class="status-row">
+              <div class="status-bar-track">
+                <div class="status-bar-fill" style="width: 70%;"></div>
+              </div>
+            </div>
+
+            <div class="status-row">
+              <span class="status-label">기술 경쟁력</span>
+              <span style="font-size:11px;">50%</span>
+            </div>
+            <div class="status-row">
+              <div class="status-bar-track">
+                <div class="status-bar-fill warn" style="width: 50%;"></div>
+              </div>
+            </div>
+
+            <div class="status-row">
+              <span class="status-label">밸류에이션 부담</span>
+              <span style="font-size:11px;">30%</span>
+            </div>
+            <div class="status-row">
+              <div class="status-bar-track">
+                <div class="status-bar-fill warn" style="width: 30%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="micro-chart">
+            <strong>적정 가치 분석</strong><br />
+            현재 AI 추정 적정가는 <strong>95,300원</strong>으로,
+            현 주가 대비 약 <span style="color:#4ade80;">+11.7%</span> 업사이드가 남아 있습니다.
+          </div>
+
+          <div class="gauge">
+            <div>기술적 분석 – 매수/매도 게이지</div>
+            <div class="gauge-arc">
+              <div class="gauge-fill"></div>
+              <div class="gauge-pointer"></div>
+            </div>
+            <div class="gauge-labels">
+              <span>강한 매도</span>
+              <span>중립</span>
+              <span>강한 매수</span>
+            </div>
+          </div>
+
+          <div class="micro-chart" style="margin-top:10px;">
+            <strong>애널리스트 센티먼트</strong><br />
+            매수 68% · 보유 25% · 매도 7%<br />
+            최근 1개월 리포트 기준.
+          </div>
+
+          <div class="protips">
+            <div class="protips-title">ProTips · 오늘의 전략</div>
+            <div>
+              2주 기준 분기 실적 발표 전까지
+              <strong>“조정 시 분할 매수”</strong> 전략이
+              과거 데이터에서 가장 좋은 손익비를 보였습니다.
+            </div>
+          </div>
+        </div>
+
+        <!-- 나의 보유 정보 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">나의 보유 종목</div>
+            <div class="card-sub">‘삼성전자’ 개별 포지션 요약</div>
+          </div>
+          <div class="divider"></div>
+          <div class="holding-grid">
+            <div class="holding-item">
+              <div class="holding-label">매입 단가</div>
+              <div class="holding-value">72,000원</div>
+            </div>
+            <div class="holding-item">
+              <div class="holding-label">보유 수량</div>
+              <div class="holding-value">100주</div>
+            </div>
+            <div class="holding-item">
+              <div class="holding-label">평가 금액</div>
+              <div class="holding-value">8,530,000원</div>
+            </div>
+            <div class="holding-item">
+              <div class="holding-label">평가 손익</div>
+              <div class="holding-value pos">+1,330,000원 (+18.4%)</div>
+            </div>
+          </div>
+          <div class="report-text" style="margin-top:8px;">
+            손절 기준 <strong>-3%</strong>, 일부 익절 기준 <strong>+15%</strong>로 저장되어 있으며,
+            조건 충족 시 시그널 알림으로 안내합니다.
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // 더미 데이터 생성 (1년 기준 12개 지점)
+    const baseLabels = [
+      "1월", "2월", "3월", "4월", "5월", "6월",
+      "7월", "8월", "9월", "10월", "11월", "12월"
+    ];
+
+    const priceData = [70, 72, 69, 75, 78, 80, 82, 86, 83, 88, 90, 92];
+    const sentimentData = [40, 45, 48, 55, 60, 58, 62, 70, 65, 72, 75, 78];
+    const flowData = [50, -20, 10, 30, 60, -10, 40, 80, -25, 35, 45, 65];
+
+    // 각 지점별 뉴스 요약
+    const newsSummaries = [
+      "1월: AI 서버 수요 둔화 우려에도 견조한 실적 전망.",
+      "2월: 북미 데이터센터 고객향 신규 HBM 수주 공시.",
+      "3월: 매크로 불확실성으로 단기 변동성 확대.",
+      "4월: AI GPU 공급 부족 이슈로 관련주 동반 강세.",
+      "5월: 해외 브로커리지 리포트 ‘Top Pick’ 선정.",
+      "6월: 환율 부담 부각, 외국인 매도 전환.",
+      "7월: 삼성, 차세대 HBM3E 양산 계획 발표.",
+      "8월: 글로벌 빅테크와 장기 공급 계약 체결 기대.",
+      "9월: 단기 차익 실현 구간, 수급 조정.",
+      "10월: 실적 서프라이즈, AI 부문 마진 개선.",
+      "11월: 반도체 업황 회복 기조 확인.",
+      "12월: CAPEX 확대 계획 발표로 장기 성장성 부각."
+    ];
+
+    // 차트 초기화
+    const ctx = document.getElementById("stockChart").getContext("2d");
+    const stockChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: baseLabels,
+        datasets: [
+          {
+            type: "line",
+            label: "Price",
+            data: priceData,
+            yAxisID: "y",
+            borderColor: "#60a5fa",
+            backgroundColor: "rgba(96,165,250,0.15)",
+            tension: 0.3,
+            pointRadius: 3,
+            pointHoverRadius: 4
+          },
+          {
+            type: "line",
+            label: "Sentiment",
+            data: sentimentData,
+            yAxisID: "y1",
+            borderColor: "#fb923c",
+            backgroundColor: "rgba(251,146,60,0.16)",
+            tension: 0.3,
+            borderDash: [4, 3],
+            pointRadius: 3,
+            pointHoverRadius: 4
+          },
+          {
+            type: "bar",
+            label: "Flow (억 원)",
+            data: flowData,
+            yAxisID: "y2",
+            backgroundColor: function (ctx) {
+              const value = ctx.raw || 0;
+              return value >= 0 ? "rgba(74,222,128,0.7)" : "rgba(248,113,113,0.7)";
+            },
+            borderRadius: 3,
+            barPercentage: 0.6,
+            categoryPercentage: 0.7
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            display: false
+          },
+          tooltip: {
+            backgroundColor: "rgba(15,23,42,0.96)",
+            borderColor: "rgba(148,163,184,0.8)",
+            borderWidth: 1,
+            padding: 10,
+            titleColor: "#e5e7eb",
+            bodyColor: "#e5e7eb",
+            footerColor: "#9ca3af",
+            callbacks: {
+              footer: (items) => {
+                if (!items.length) return "";
+                const idx = items[0].dataIndex;
+                return "뉴스 요약: " + newsSummaries[idx];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false
+            },
+            ticks: {
+              color: "#9ca3af",
+              font: { size: 11 }
+            }
+          },
+          y: {
+            position: "left",
+            grid: {
+              color: "rgba(55,65,81,0.6)"
+            },
+            ticks: {
+              color: "#9ca3af",
+              font: { size: 11 }
+            },
+            title: {
+              display: true,
+              text: "Price (천원)",
+              color: "#9ca3af",
+              font: { size: 11 }
+            }
+          },
+          y1: {
+            position: "right",
+            grid: {
+              display: false
+            },
+            ticks: {
+              color: "#9ca3af",
+              font: { size: 11 }
+            },
+            title: {
+              display: true,
+              text: "Sentiment (0-100)",
+              color: "#9ca3af",
+              font: { size: 11 }
+            }
+          },
+          y2: {
+            position: "right",
+            grid: {
+              display: false
+            },
+            ticks: {
+              display: false
+            }
+          }
+        }
+      }
+    });
+
+    // 기간 버튼 클릭 시 더미로 데이터 길이만 조정하는 기능
+    const rangeButtons = document.querySelectorAll(".range-btn");
+
+    function updateRange(range) {
+      let sliceCount;
+      switch (range) {
+        case "1d":
+          sliceCount = 1;
+          break;
+        case "1w":
+          sliceCount = 2;
+          break;
+        case "1m":
+          sliceCount = 3;
+          break;
+        case "3m":
+          sliceCount = 4;
+          break;
+        case "6m":
+          sliceCount = 6;
+          break;
+        case "1y":
+          sliceCount = 12;
+          break;
+        case "5y":
+        case "all":
+        default:
+          sliceCount = 12;
+          break;
+      }
+
+      stockChart.data.labels = baseLabels.slice(0, sliceCount);
+      stockChart.data.datasets[0].data = priceData.slice(0, sliceCount);
+      stockChart.data.datasets[1].data = sentimentData.slice(0, sliceCount);
+      stockChart.data.datasets[2].data = flowData.slice(0, sliceCount);
+      stockChart.update();
+    }
+
+    rangeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        rangeButtons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        updateRange(btn.dataset.range);
+      });
+    });
+
+    // 초기 범위는 1년
+    updateRange("1y");
+  </script>
+</body>
+</html>

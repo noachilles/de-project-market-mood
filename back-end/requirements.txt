@@ -1,17 +1,45 @@
-asgiref==3.9.1
-certifi==2025.8.3
-cffi==1.17.1
-charset-normalizer==3.4.2
-cryptography==45.0.5
-dj-rest-auth==7.0.1
-Django==5.2.4
-django-allauth==64.0.0
-djangorestframework==3.16.0
-idna==3.10
-oauthlib==3.3.1
-pycparser==2.22
-PyJWT==2.10.1
-requests==2.32.4
-sqlparse==0.5.3
-tzdata==2025.2
-urllib3==2.5.0
+# -------------------------------------
+# 1. Django Core & Configuration
+# -------------------------------------
+Django>=4.2,<5.1           # LTS 버전(4.2) 또는 최신 안정 버전
+django-environ             # .env 파일 관리 (환경변수 로드)
+
+# -------------------------------------
+# 2. API Development (REST API)
+# -------------------------------------
+djangorestframework        # REST API 구축 필수 라이브러리
+django-cors-headers        # 프론트엔드(Vue/React)와 통신 시 CORS 에러 방지
+
+# -------------------------------------
+# 3. Database (PostgreSQL)
+# -------------------------------------
+psycopg2-binary>=2.9            # Postgres 연결용 어댑터 (Docker에서 빌드 없이 설치 가능)
+
+# -------------------------------------
+# 4. Infrastructure Clients (Data Pipeline)
+# -------------------------------------
+redis>=5.0                      # Redis 연결 (캐싱, 세션 관리 등)
+kafka-python               # Kafka 메시지 수신/발신 (백엔드에서 직접 쏠 경우 대비)
+elasticsearch>=8.12.0       # Elasticsearch 8.x 클라이언트 (검색 엔진 연동)
+
+# -------------------------------------
+# 5. Production Server (Docker 실행용)
+# -------------------------------------
+gunicorn                   # 실무용 WSGI HTTP 서버 (runserver 대신 사용 권장)
+
+# -------------------------------------
+# 6. Utilities
+# -------------------------------------
+requests                   # 외부 API 호출용 (HTTP Client)
+PyJWT                      # JWT 토큰 인증 (로그인 구현 시 필요)
+pandas>=2.0.0              # 데이터 분석 및 처리
+# FinanceDataReader는 선택적 패키지로 런타임에 설치 (빌드 시 오류 방지)
+# docker-compose exec backend pip install FinanceDataReader
+finance-datareader
+python-dotenv>=1.0.0
+
+# OpenAI (GMS 프록시 포함)
+openai>=1.0.0
+daphne
+channels
+channels_redis

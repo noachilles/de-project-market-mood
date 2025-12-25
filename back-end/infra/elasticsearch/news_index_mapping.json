@@ -1,0 +1,41 @@
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "korean_analyzer": {
+          "type": "standard"
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "news_id": {
+        "type": "keyword"
+      },
+      "title": {
+        "type": "text",
+        "analyzer": "korean_analyzer"
+      },
+      "content_summary": {
+        "type": "text",
+        "analyzer": "korean_analyzer"
+      },
+      "stock_codes": {
+        "type": "keyword"
+      },
+      "published_at": {
+        "type": "date"
+      },
+      "sentiment_score": {
+        "type": "float"
+      },
+      "embedding": {
+        "type": "dense_vector",
+        "dims": 1536,
+        "index": true,
+        "similarity": "cosine"
+      }
+    }
+  }
+}

@@ -1,1 +1,111 @@
-.venv/
+# =======================================================
+# 1. 보안 및 환경 설정 (가장 중요! 절대 커밋 금지)
+# =======================================================
+# 환경 변수 파일 (API Key, DB 비밀번호 등 포함)
+.env
+.env.*
+
+# Python 가상환경 폴더
+.venv
+env/
+venv/
+ENV/
+env.bak
+venv.bak
+
+# Django 로컬 설정 (배포 시 서버마다 달라야 하는 설정)
+local_settings.py
+
+# =======================================================
+# 2. 시스템 및 IDE 설정 (개발 도구 및 OS 파일)
+# =======================================================
+# Mac OS 썸네일/폴더 설정
+.DS_Store
+
+# Windows 썸네일
+Thumbs.db
+
+# VS Code 설정 폴더
+.vscode/
+
+# IntelliJ / PyCharm 설정 폴더
+.idea/
+
+# Jupyter Notebook 체크포인트
+.ipynb_checkpoints
+
+# =======================================================
+# 3. Python & Django (Backend)
+# =======================================================
+# Python 컴파일 파일 (실행 속도 향상을 위한 임시 파일)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Django 로그 파일
+*.log
+
+# Django 기본 DB (로컬 테스트용 DB 파일이므로 공유 X)
+db.sqlite3
+db.sqlite3-journal
+
+# 미디어 파일 (유저가 업로드한 이미지는 소스코드가 아님)
+media/
+
+# 정적 파일 모음 (collectstatic으로 생성되는 폴더)
+staticfiles/
+
+# 테스트 커버리지 리포트
+htmlcov/
+.coverage
+.tox/
+.nox/
+
+# 배포 패키징 관련
+dist/
+build/
+*.egg-info/
+
+# =======================================================
+# 4. Vue.js & Node.js (Frontend)
+# =======================================================
+# Node 라이브러리 (용량이 매우 크므로 package.json만 공유하고 이건 무시)
+node_modules/
+
+# NPM/Yarn 에러 로그
+npm-debug.log
+yarn-error.log
+
+# 빌드 결과물 (배포용 파일)
+dist/
+
+# =======================================================
+# 5. Docker & Data Engineering (Project Specific)
+# =======================================================
+# Docker Volume으로 마운트된 DB 데이터 (Postgres, ES 등)
+# 소스코드가 아닌 '실제 데이터'이므로 깃에 올리면 안 됨
+data/volumes/
+postgres-data/
+
+# (선택) 로컬 전용 설정 파일이 있다면 유지, 공유해야 한다면 주석(#) 제거
+data/config/
+
+# 각종 런타임 Lock 파일 (Elasticsearch node.lock 등)
+*.lock
+
+# [예외] Node.js 의존성 잠금 파일은 공유해야 함 (버전 일치용)
+!package-lock.json
+# !yarn.lock 
+# !pdm.lock
+# !poetry.lock
+
+# =======================================================
+# 6. 기타 (혹시 모를 툴들)
+# =======================================================
+# Celery (비동기 작업 큐)
+celerybeat-schedule
+celerybeat.pid
+
+# Pytest 캐시
+.pytest_cache/
