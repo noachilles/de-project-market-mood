@@ -21,7 +21,8 @@
         :class="{ 'clickable': news.url }"
         @click="news.url && handleNewsClick(news.url)"
       >
-        {{ news.title || news }}
+        <span class="news-title">{{ news.title || news }}</span>
+        <span v-if="news.url" class="link-icon"></span>
       </li>
 
       <li v-if="newsList.length === 0" class="news-item muted">
@@ -107,6 +108,10 @@ function handleNewsClick(url) {
   border-bottom: 1px solid rgba(148,163,184,0.15);
   font-size: 13px;
   color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .news-item:last-child {
@@ -125,6 +130,24 @@ function handleNewsClick(url) {
 
 .news-item.clickable:hover {
   background-color: rgba(148, 163, 184, 0.1);
+}
+
+.news-title {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-icon {
+  font-size: 12px;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+
+.news-item.clickable:hover .link-icon {
+  opacity: 1;
 }
 
 .loading-state {

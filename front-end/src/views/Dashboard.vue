@@ -6,7 +6,8 @@ import Header from "@/components/dashboard/Header.vue";
 import WatchList from "@/components/dashboard/WatchList.vue";
 import StockChart from "@/components/dashboard/StockChart.vue";
 import NewsFeed from "@/components/dashboard/NewsFeed.vue";
-import AiInsight from "@/components/dashboard/AiInsight.vue";
+import HotKeywords from "@/components/dashboard/HotKeywords.vue";
+import ChatBot from "@/components/dashboard/ChatBot.vue";
 import { fetchCurrentPrice } from "@/services/stocks";
 
 /* =========================
@@ -202,10 +203,12 @@ onBeforeUnmount(() => clearInterval(timer));
       </section>
 
       <section class="column right">
-        <AiInsight :ticker="selectedTicker" />
+        <HotKeywords />
         <NewsFeed :items="aiNewsList" :is-loading="isNewsLoading" :ticker="selectedTicker" />
       </section>
     </main>
+    
+    <ChatBot />
   </div>
 </template>
 
